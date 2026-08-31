@@ -56,6 +56,7 @@ class BilibiliPlugin(BasePlugin):
         ),
     ]
     login_supported = True
+    login_mode = "geetest_sms"
     default_schedule_time = "08:00"
 
     def create_login_session(self, account_id: int):

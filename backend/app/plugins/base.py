@@ -51,6 +51,9 @@ class BasePlugin(ABC):
     default_schedule_time: str = "08:00"
     #: 是否支持交互式登录（如验证码登录后自动抓取 Cookie）
     login_supported: bool = False
+    #: 交互式登录方式，前端据此渲染对应登录面板：
+    #: "qr" 扫码登录 / "geetest_sms" 极验+短信验证码 / 空串表示无交互登录
+    login_mode: str = ""
     #: 是否支持同步好友列表（供前端勾选目标）
     friends_supported: bool = False
     #: 是否随项目内置（随附插件）；内置只是标签，同样可卸载
@@ -126,6 +129,7 @@ class BasePlugin(ABC):
             "config_fields": [f.__dict__ for f in self.config_fields],
             "default_schedule_time": self.default_schedule_time,
             "login_supported": self.login_supported,
+            "login_mode": self.login_mode,
             "friends_supported": self.friends_supported,
             "builtin": self.builtin,
         }

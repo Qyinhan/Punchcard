@@ -25,3 +25,6 @@ frontend/dist/
 # Agent 指南与审查产物（本地专用，不入库）
 AGENTS.md
 code_modifications.txt
+
+# Playwright MCP 快照（本地验证产物）
+.playwright-mcp/

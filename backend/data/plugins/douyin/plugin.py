@@ -22,6 +22,7 @@ class DouyinPlugin(BasePlugin):
                   placeholder="好友昵称，每行一个（也可用同步好友功能勾选）"),
     ]
     login_supported = True
+    login_mode = "qr"
     friends_supported = True
     default_schedule_time = "10:00"
 

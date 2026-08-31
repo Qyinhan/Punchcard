@@ -77,93 +77,39 @@
         </el-form-item>
 
         <template v-if="currentPlugin">
-          <template v-if="currentPlugin.platform === 'douyin'">
-            <el-divider content-position="left">抖音登录</el-divider>
-
-            <el-form-item label="扫码登录">
-              <div v-if="loginStage === 'qr'" class="qr-wrap" style="margin-bottom: 12px;">
-                <img v-if="qrImage" :src="qrImage" class="qr-img" alt="登录二维码" />
-                <el-icon v-else class="qr-loading" :size="32"><Loading /></el-icon>
-              </div>
-              <div class="qr-actions">
-                <el-button type="primary" :loading="loginBusy && loginStage === 'initializing'" @click="doQrLogin">
-                  {{ loginStage === 'qr' ? '刷新二维码' : '获取登录二维码' }}
-                </el-button>
-                <el-button v-if="loginStage" plain @click="doLoginCancel">取消</el-button>
-                <span v-if="loginHint" class="ops-hint" style="margin-left: 10px;">{{ loginHint }}</span>
-              </div>
-              <span class="ops-hint" style="display:block;margin-top:8px;">打开手机抖音 APP，扫一扫即可登录（免验证码，登录后自动保存 Cookie）</span>
-            </el-form-item>
-
-            <el-form-item v-if="loginStage === 'code'" label="短信验证码" required>
-              <el-input v-model="smsCode" placeholder="输入手机上收到的验证码" maxlength="6" />
-            </el-form-item>
-
-            <el-form-item v-if="loginStage === 'code'">
-              <el-button :loading="loginBusy" @click="doLoginCode">登录</el-button>
-            </el-form-item>
-
-            <el-form-item label="Cookie">
-              <el-input v-model="form.credentials.cookies" type="textarea" :rows="3"
-                placeholder="扫码登录后自动保存，可留空；也可直接粘贴浏览器导出的 Cookie 字符串（name=value; ...）" />
-            </el-form-item>
+          <template v-if="currentPlugin.login_mode === 'qr'">
+            <el-divider content-position="left">扫码登录</el-divider>
+            <QrLoginPanel v-model:smsCode="smsCode" :stage="loginStage" :busy="loginBusy"
+              :hint="loginHint" :qr-image="qrImage" @refresh="doQrLogin"
+              @cancel="doLoginCancel" @submit-code="doLoginCode" />
           </template>
 
-          <template v-else-if="currentPlugin.platform === 'bilibili'">
-            <el-divider content-position="left">B站登录</el-divider>
-            <el-form-item label="登录手机号">
-              <el-input v-model="form.credentials.phone" placeholder="手机号，用于短信验证码登录" />
-            </el-form-item>
-
-            <el-form-item v-if="loginStage === 'captcha' && geetestParams" label="人机验证">
-              <div class="geetest-wrap">
-                <p class="captcha-tip">请完成下方滑块验证后自动发送短信</p>
-                <div ref="geetestContainerRef" class="geetest-container"></div>
-              </div>
-            </el-form-item>
-
-            <el-form-item v-if="loginStage === 'code'" label="短信验证码" required>
-              <el-input v-model="smsCode" placeholder="输入收到的6位短信验证码" maxlength="6" />
-            </el-form-item>
-
-            <el-form-item>
-              <el-button type="primary" plain
-                :loading="loginBusy && loginStage === 'initializing'"
-                @click="doBiliLoginStart">获取验证码</el-button>
-              <el-button v-if="loginStage === 'code'" :loading="loginBusy" @click="doLoginCode">登录</el-button>
-              <el-button v-if="loginStage" plain @click="doLoginCancel">取消登录</el-button>
-              <span v-if="loginHint" class="ops-hint">{{ loginHint }}</span>
-            </el-form-item>
-
-            <el-divider content-position="left">凭证信息</el-divider>
-            <el-form-item label="SESSDATA">
-              <el-input v-model="form.credentials.sessdata" type="password" show-password
-                :placeholder="editingId ? '登录后自动保存，留空则不修改' : '手动填写 SESSDATA Cookie；或使用手机号登录自动获取'" />
-            </el-form-item>
+          <template v-else-if="currentPlugin.login_mode === 'geetest_sms'">
+            <SmsLoginPanel v-model:smsCode="smsCode" :stage="loginStage" :busy="loginBusy"
+              :hint="loginHint" :geetest-params="geetestParams" :container-ref="geetestContainerRef"
+              @send="doSmsLoginStart" @cancel="doLoginCancel" @submit-code="doLoginCode" />
           </template>
 
-          <template v-else>
-            <el-divider content-position="left">凭证信息</el-divider>
-            <el-form-item v-for="f in currentPlugin.credential_fields" :key="f.key" :label="f.label"
-              :required="f.required && !editingId">
-              <el-input v-if="f.type === 'textarea'" v-model="form.credentials[f.key]" type="textarea" :rows="3"
-                :placeholder="editingId ? '留空则不修改' : f.placeholder" />
-              <el-input v-else-if="f.type === 'password'" v-model="form.credentials[f.key]" type="password" show-password
-                :placeholder="editingId ? '留空则不修改' : f.placeholder" />
-              <el-input v-else v-model="form.credentials[f.key]"
-                :placeholder="editingId ? '留空则不修改' : f.placeholder" />
-            </el-form-item>
+          <el-divider content-position="left">凭证信息</el-divider>
+          <el-form-item v-for="f in currentPlugin.credential_fields" :key="f.key" :label="f.label"
+            :required="f.required && !editingId">
+            <el-input v-if="f.type === 'textarea'" v-model="form.credentials[f.key]" type="textarea" :rows="3"
+              :placeholder="editingId ? '留空则不修改' : f.placeholder" />
+            <el-input v-else-if="f.type === 'password'" v-model="form.credentials[f.key]" type="password" show-password
+              :placeholder="editingId ? '留空则不修改' : f.placeholder" />
+            <el-input v-else v-model="form.credentials[f.key]"
+              :placeholder="editingId ? '留空则不修改' : f.placeholder" />
+          </el-form-item>
 
-            <template v-if="currentPlugin.config_fields.length">
-              <el-divider content-position="left">附加配置</el-divider>
-              <el-form-item v-for="f in currentPlugin.config_fields" :key="f.key" :label="f.label">
-                <el-input v-if="f.type === 'textarea'" v-model="form.extra_config[f.key]" type="textarea" :rows="2"
-                  :placeholder="f.placeholder" />
-                <el-input v-else-if="f.type === 'number'" v-model="form.extra_config[f.key]" type="number"
-                  :placeholder="f.placeholder" />
-                <el-input v-else v-model="form.extra_config[f.key]" :placeholder="f.placeholder" />
-              </el-form-item>
-            </template>
+          <template v-if="currentPlugin.config_fields.length">
+            <el-divider content-position="left">附加配置</el-divider>
+            <el-form-item v-for="f in currentPlugin.config_fields" :key="f.key" :label="f.label">
+              <el-input v-if="f.type === 'textarea'" v-model="form.extra_config[f.key]" type="textarea" :rows="2"
+                :placeholder="f.placeholder" />
+              <el-input v-else-if="f.type === 'number'" v-model="form.extra_config[f.key]" type="number"
+                :placeholder="f.placeholder" />
+              <el-input v-else v-model="form.extra_config[f.key]" :placeholder="f.placeholder" />
+            </el-form-item>
           </template>
         </template>
       </el-form>
@@ -176,13 +122,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Loading } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import {
   getPlugins, getAccounts, createAccount, updateAccount, deleteAccount, triggerCheckin,
-  loginStart, loginStatus, loginCode, loginCaptcha, loginCancel, qrLogin,
 } from '../api'
+import { useLoginSession } from '../composables/useLoginSession'
+import QrLoginPanel from '../components/login/QrLoginPanel.vue'
+import SmsLoginPanel from '../components/login/SmsLoginPanel.vue'
 import { platformName, platformShort, platformColor, fmtDateTime } from '../utils/format'
 
 const accounts = ref([])
@@ -191,18 +139,6 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
-
-const loginStage = ref('')          // '' | initializing | captcha | code | success | failed
-const loginBusy = ref(false)
-const loginHint = ref('')
-// 已提交验证码、正在等登录结果：期间状态会短暂停留在 code，需持续轮询直到成功/失败
-const codePending = ref(false)
-const smsCode = ref('')
-const qrImage = ref('')
-const geetestParams = ref(null)
-const geetestContainerRef = ref(null)
-let geetestObj = null
-let loginPollTimer = null
 
 const form = reactive({ platform: '', name: '', credentials: {}, extra_config: {}, schedule_time: '08:00' })
 
@@ -241,22 +177,6 @@ const onPlatformChange = () => {
   }
 }
 
-const resetLoginOps = () => {
-  clearTimeout(loginPollTimer)
-  loginPollTimer = null
-  codePending.value = false
-  loginStage.value = ''
-  loginBusy.value = false
-  loginHint.value = ''
-  qrImage.value = ''
-  geetestParams.value = null
-  if (geetestObj) {
-    try { geetestObj.destroy() } catch {}
-    geetestObj = null
-  }
-  smsCode.value = ''
-}
-
 const clearOps = () => {
   resetLoginOps()
 }
@@ -266,7 +186,7 @@ watch(dialogVisible, (v) => {
     // 关对话框时若登录还在进行，取消服务器会话，避免残留导致下次登录 409。
     // 无条件调用（无会话时后端 404，doLoginCancel 已静默吞掉）
     if (editingId.value) {
-      doLoginCancel()
+      doLoginCancel(editingId.value)
     } else {
       clearOps()
     }
@@ -293,213 +213,8 @@ const openEdit = (row) => {
   dialogVisible.value = true
 }
 
-// 延迟 1.5s 后轮询一次登录会话状态（登录各阶段都是异步推进的）
-const scheduleLoginPoll = () => {
-  clearTimeout(loginPollTimer)
-  loginPollTimer = setTimeout(pollLogin, 1500)
-}
-
-// 轮询登录会话状态，按 stage 分支渲染对应交互区（滑块/验证码/成功/失败）
-const pollLogin = async () => {
-  if (!editingId.value) return
-  try {
-    const s = await loginStatus(editingId.value)
-    if (s.stage === 'captcha') {
-      loginStage.value = 'captcha'
-      loginBusy.value = false
-      // B站：加载极验组件
-      if (s.geetest) {
-        geetestParams.value = s.geetest
-        loginHint.value = '请完成下方滑块验证'
-        await nextTick()
-        loadGeetest(s.geetest)
-      }
-    } else if (s.stage === 'code') {
-      if (codePending.value) {
-        // 验证码已提交、后端仍在处理（可能持续几十秒），继续等待。
-        // 后端收到 code 命令后才会切状态，期间轮询到的仍是旧的
-        // device_code 状态，必须以本地 codePending 为准，避免退回输入框
-        loginStage.value = 'initializing'
-        loginBusy.value = true
-        loginHint.value = '正在验证登录…'
-        scheduleLoginPoll()
-      } else if (s.device_code) {
-        // 设备授权第二步：输入手机上收到的授权验证码
-        loginStage.value = 'code'
-        loginHint.value = '设备授权验证码已发送，请输入手机上收到的验证码'
-        loginBusy.value = false
-        smsCode.value = ''
-      } else {
-        loginStage.value = 'code'
-        loginHint.value = s.sent ? '验证码已发送，请输入短信验证码' : '请输入短信验证码'
-        loginBusy.value = false
-      }
-    } else if (s.stage === 'success') {
-      codePending.value = false
-      loginStage.value = 'success'
-      loginBusy.value = false
-      loginHint.value = ''
-      ElMessage.success('登录成功，Cookie 已保存')
-      load()
-    } else if (s.stage === 'failed') {
-      codePending.value = false
-      loginStage.value = 'failed'
-      loginBusy.value = false
-      loginHint.value = s.error || '登录失败'
-      ElMessage.error(s.error || '登录失败')
-    } else if (s.stage === 'qr') {
-      // 扫码登录：展示二维码，等待用户手机扫码；已扫码则提示去手机确认
-      loginStage.value = 'qr'
-      loginBusy.value = true
-      if (s.scanned) {
-        loginHint.value = s.message || '二维码已扫码，请在手机抖音 APP 中完成确认登录…'
-      } else {
-        loginHint.value = '请用手机抖音 APP 扫码，扫码后确认登录'
-        if (s.qr_image) qrImage.value = 'data:image/png;base64,' + s.qr_image
-      }
-      scheduleLoginPoll()
-    } else if (s.stage === 'device_confirm') {
-      // 抖音"新设备登录"二次验证：需要用户在手机抖音 APP 中确认
-      codePending.value = false
-      loginStage.value = 'device_confirm'
-      loginBusy.value = true
-      loginHint.value = s.message
-        ? `请在手机「抖音」APP 中确认登录（${s.message}）`
-        : '请在手机「抖音」APP 中确认登录，确认后会自动完成…'
-      scheduleLoginPoll()
-    } else {
-      loginStage.value = 'initializing'
-      scheduleLoginPoll()
-    }
-  } catch (e) {
-    codePending.value = false
-    loginBusy.value = false
-    loginHint.value = e.message
-    if (String(e.message).includes('无登录会话')) {
-      loginStage.value = ''
-    } else {
-      scheduleLoginPoll()
-    }
-  }
-}
-
-const doQrLogin = async () => {
-  const id = await ensureSavedAccount()
-  if (!id) return
-  loginBusy.value = true
-  loginStage.value = 'initializing'
-  loginHint.value = '正在获取登录二维码…'
-  try {
-    await qrLogin(id)
-    scheduleLoginPoll()
-  } catch (e) {
-    loginBusy.value = false
-    loginStage.value = ''
-    loginHint.value = ''
-    ElMessage.error(e.message)
-  }
-}
-
-const doLoginCode = async () => {
-  if (!smsCode.value) {
-    ElMessage.warning('请输入短信验证码')
-    return
-  }
-  codePending.value = true
-  loginBusy.value = true
-  loginStage.value = 'initializing'
-  loginHint.value = '正在验证登录…'
-  try {
-    await loginCode(editingId.value, smsCode.value)
-    scheduleLoginPoll()
-  } catch (e) {
-    codePending.value = false
-    loginBusy.value = false
-    loginHint.value = ''
-    ElMessage.error(e.message)
-  }
-}
-
-const doLoginCancel = async () => {
-  try {
-    if (editingId.value) await loginCancel(editingId.value)
-  } catch (e) { /* 忽略取消失败 */ }
-  resetLoginOps()
-}
-
-// ---- B站登录 ----
-
-// B 站流程：先获取极验参数（send_code），前端完成后端发短信（captcha），再输验证码（code）
-const doBiliLoginStart = async () => {
-  if (!form.credentials.phone) {
-    ElMessage.warning('请先填写登录手机号')
-    return
-  }
-  const id = await ensureSavedAccount()
-  if (!id) return
-  loginBusy.value = true
-  loginStage.value = 'initializing'
-  loginHint.value = '正在获取极验参数…'
-  try {
-    await loginStart(id, form.credentials.phone)
-    scheduleLoginPoll()
-  } catch (err) {
-    loginBusy.value = false
-    loginHint.value = ''
-    ElMessage.error(err.message)
-  }
-}
-
-// 按需加载极验组件（window.initGeetest），首次使用才注入官方脚本
-const loadGeetest = (params) => {
-  const doInit = () => {
-    if (!geetestContainerRef.value) return
-    window.initGeetest({
-      gt: params.gt,
-      challenge: params.challenge,
-      offline: false,
-      new_captcha: true,
-      product: 'bind',
-      width: '100%',
-    }, (captcha) => {
-      geetestObj = captcha
-      captcha.appendTo(geetestContainerRef.value)
-      captcha.onSuccess(async () => {
-        const result = captcha.getValidate()
-        loginBusy.value = true
-        loginStage.value = 'initializing'
-        loginHint.value = '正在发送短信验证码…'
-        try {
-          await loginCaptcha(editingId.value, {
-            validate: result.geetest_validate,
-            seccode: result.geetest_seccode,
-            challenge: result.geetest_challenge,
-            token: params.token,
-          })
-          scheduleLoginPoll()
-        } catch (err) {
-          loginBusy.value = false
-          loginHint.value = ''
-          ElMessage.error(err.message)
-        }
-      })
-    })
-  }
-  if (window.initGeetest) {
-    doInit()
-  } else {
-    const script = document.createElement('script')
-    script.src = 'https://static.geetest.com/static/js/gt.0.4.9.js'
-    script.onload = doInit
-    // SDK 加载失败（如外网 CDN 不可达）时给出明确提示，避免按钮无响应
-    script.onerror = () => {
-      loginBusy.value = false
-      loginHint.value = ''
-      ElMessage.error('极验 SDK 加载失败，请检查网络后重试')
-    }
-    document.head.appendChild(script)
-  }
-}
+// 交互式登录（平台无关，由插件 login_mode 驱动）：
+// 状态机在 ensureSavedAccount 定义后初始化，见脚本下方
 
 const submitAccount = async (closeAfter) => {
   if (!form.platform || !form.name) {
@@ -554,6 +269,16 @@ const ensureSavedAccount = async () => {
   const acc = await submitAccount(false)
   return acc ? acc.id : null
 }
+
+// 交互式登录状态机：依赖 ensureSavedAccount 定义之后才能初始化
+const {
+  loginStage, loginBusy, loginHint, smsCode, qrImage,
+  geetestParams, geetestContainerRef,
+  doQrLogin, doSmsLoginStart, doLoginCode, doLoginCancel, resetLoginOps,
+} = useLoginSession({
+  getAccountId: ensureSavedAccount,
+  onSuccess: load,
+})
 
 const toggle = async (row, val) => {
   try {
@@ -724,90 +449,5 @@ onMounted(load)
   margin-top: 6px;
   font-size: 12.5px;
   color: var(--ink-3);
-}
-
-.ops-hint {
-  margin-left: 8px;
-  color: var(--ink-3);
-  font-size: 12px;
-}
-
-.qr-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 200px;
-  height: 200px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
-}
-
-.qr-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.qr-loading {
-  color: var(--ink-3);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.captcha-wrap {
-  width: 100%;
-}
-
-.captcha-tip {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: var(--ink-3);
-}
-
-.captcha-img-wrap {
-  position: relative;
-  display: inline-block;
-  cursor: crosshair;
-  user-select: none;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.captcha-img-wrap:hover {
-  box-shadow: 0 0 0 2px var(--brand);
-}
-
-.captcha-img {
-  display: block;
-  max-width: 320px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.captcha-guide {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: rgba(79, 107, 255, 0.75);
-  pointer-events: none;
-  transform: translateX(-50%);
-  box-shadow: 0 0 6px rgba(79, 107, 255, 0.5);
-}
-
-.geetest-wrap {
-  width: 100%;
-}
-
-.geetest-container {
-  max-width: 360px;
-  min-height: 44px;
 }
 </style>

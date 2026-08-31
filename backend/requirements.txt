@@ -1,0 +1,10 @@
+# Python 3.10+（代码使用了 PEP 604 联合类型语法与 pathlib.is_relative_to）
+fastapi>=0.110
+uvicorn[standard]>=0.27
+sqlalchemy>=2.0
+apscheduler>=3.10
+cryptography>=41.0
+httpx>=0.25
+tzdata>=2024.1
+playwright>=1.40
+python-multipart>=0.0.9

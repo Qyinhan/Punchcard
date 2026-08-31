@@ -1,0 +1,27 @@
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+backend/.venv/
+# 运行时数据（数据库/密钥/调试截图）不入库，但随附插件目录需提交
+backend/data/*
+!backend/data/plugins/
+!backend/data/plugins/**
+# 白名单回收后再排除编译缓存（顺序重要：必须在 !plugins/** 之后）
+backend/data/plugins/**/__pycache__/
+backend/data/plugins/**/*.pyc
+backend/data/plugins/**/*.pyo
+backend/*.log
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Agent 指南与审查产物（本地专用，不入库）
+AGENTS.md
+code_modifications.txt

@@ -1,0 +1,41 @@
+# PunchCard 多平台自动签到 - Linux 部署示例 (systemd)
+# 用法：
+#   sudo cp deploy/punchcard.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now punchcard
+#
+# 按实际路径修改下面两行：
+#   User=           运行用户（推荐专用非 root 用户）
+#   WorkingDirectory / ExecStart   项目实际路径
+
+[Unit]
+Description=PunchCard 多平台自动签到
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=punchcard
+Group=punchcard
+WorkingDirectory=/opt/punchcard/backend
+ExecStart=/opt/punchcard/backend/.venv/bin/python run.py
+Restart=always
+RestartSec=5
+# 进程数与单实例限制：防止重复启动产生多个调度器
+KillMode=mixed
+
+# 对外暴露时建议保持 127.0.0.1 并用 nginx/caddy 反代加访问控制
+Environment=PUNCHCARD_HOST=127.0.0.1
+Environment=PUNCHCARD_PORT=8000
+# UTF-8 输出 + 不缓冲，保证中文日志在 systemd journal 中正常显示且实时可见
+Environment=PYTHONUTF8=1
+Environment=PYTHONUNBUFFERED=1
+# 以 root 运行 Chromium 时需要（非 root 可省略）：
+# Environment=PUNCHCARD_CHROME_NO_SANDBOX=1
+# 时区（调度按此运行）：
+# Environment=PUNCHCARD_TZ=Asia/Shanghai
+# 若想自定义 Fernet 密钥（未设置则自动生成到 data/secret.key）：
+# Environment=PUNCHCARD_SECRET_KEY=...
+
+[Install]
+WantedBy=multi-user.target

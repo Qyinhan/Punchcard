@@ -1,0 +1,178 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --brand: #4f6bff;
+  --brand-dark: #3d56cc;
+  --brand-soft: #eef0ff;
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --ink: #1f2430;
+  --ink-2: #4b5563;
+  --ink-3: #9aa1ad;
+  --line: #e5e7eb;
+  --ok: #10b981;
+  --bad: #ef4444;
+  --warn: #f59e0b;
+  --mono: 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+
+  /* Element Plus 主题变量 */
+  --el-color-primary: #4f6bff;
+  --el-color-primary-light-3: #8498ff;
+  --el-color-primary-light-5: #a7b5ff;
+  --el-color-primary-light-7: #cbd3ff;
+  --el-color-primary-light-8: #dde1ff;
+  --el-color-primary-light-9: #eef0ff;
+  --el-color-primary-dark-2: #3d56cc;
+  --el-color-success: #10b981;
+  --el-color-danger: #ef4444;
+  --el-color-warning: #f59e0b;
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-text-color-primary: #1f2430;
+  --el-text-color-regular: #4b5563;
+  --el-text-color-secondary: #9aa1ad;
+  --el-border-color: #e5e7eb;
+  --el-border-color-light: #eef0f4;
+  --el-border-color-lighter: #f1f3f7;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+}
+
+/* 通用卡片 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* 圆形状态点 */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.bad {
+  background: var(--bad);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.off {
+  background: #d1d5db;
+}
+
+/* 页面进入过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 好友选择下拉：选中项整行高亮 + 右侧蓝点 */
+.friend-dropdown .el-select-dropdown__item {
+  color: var(--ink-2);
+}
+
+.friend-dropdown .el-select-dropdown__item.is-selected {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.friend-dropdown .el-select-dropdown__item.is-selected:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.friend-dropdown .el-select-dropdown__item.is-selected::after {
+  content: '';
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50%;
+  margin-left: 8px;
+  background: var(--brand) !important;
+  mask: none !important;
+  -webkit-mask: none !important;
+  flex: none;
+  align-self: center;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d7dbe3;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c0c6d0;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

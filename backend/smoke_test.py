@@ -19,7 +19,7 @@ SMOKE_PLUGIN_CODE = (
     "class SmokePlugin(BasePlugin):\n"
     "    platform='smoke'\n"
     "    name='烟测'\n"
-    "    credential_fields=[FieldSpec(key='username', label='用户名'), FieldSpec(key='token', label='Token')]\n"
+    "    credential_fields=[FieldSpec(key='username', label='用户名', sensitive=False), FieldSpec(key='token', label='Token')]\n"
     "    default_schedule_time='10:00'\n"
     "    def checkin(self, credentials, extra):\n"
     "        return CheckinResult(True, '烟测签到成功: ' + credentials.get('username', ''))\n"
@@ -123,13 +123,15 @@ with TestClient(app) as client:
     assert r.status_code == 200, r.text
     keys = sorted(r.json()["credential_keys"])
     print("  credential_keys:", keys)
-    assert keys == ["token", "username"]
+    assert keys == ["username"]
+    assert r.json()["has_credentials"] is True
 
     print("\n== partial credential update merges ==")
     r = client.put(f"/api/accounts/{aid}", json={"credentials": {"token": "new-token"}})
     keys = sorted(r.json()["credential_keys"])
+    assert keys == ["username"]
+    assert r.json()["has_credentials"] is True
     print(" ", r.status_code, keys)
-    assert keys == ["token", "username"]
 
     print("\n== credential update validated ==")
     r = client.put(f"/api/accounts/{aid}", json={"credentials": {"token": ""}})

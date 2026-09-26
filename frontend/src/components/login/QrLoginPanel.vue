@@ -1,22 +1,26 @@
 <template>
   <div class="qr-login">
-    <el-form-item label="扫码登录">
-      <div v-if="stage === 'qr'" class="qr-wrap">
-        <img v-if="qrImage" :src="qrImage" class="qr-img" alt="登录二维码" />
-        <el-icon v-else class="qr-loading" :size="32"><Loading /></el-icon>
+    <el-form-item label="登录二维码">
+      <div class="qr-box">
+        <div v-if="stage === 'qr'" class="qr-wrap">
+          <img v-if="qrImage" :src="qrImage" class="qr-img" alt="登录二维码" />
+          <el-icon v-else class="qr-loading" :size="32"><Loading /></el-icon>
+        </div>
+        <div v-else-if="stage === 'initializing'" class="qr-wrap">
+          <el-icon class="qr-loading" :size="32"><Loading /></el-icon>
+        </div>
+
+        <div class="qr-actions">
+          <el-button v-if="stage !== 'code'" type="primary"
+            :loading="busy && stage === 'initializing'" @click="$emit('refresh')">
+            {{ stage === 'qr' ? '刷新二维码' : '获取登录二维码' }}
+          </el-button>
+          <el-button v-if="stage" plain @click="$emit('cancel')">取消</el-button>
+          <span v-if="hint" class="ops-hint">{{ hint }}</span>
+        </div>
+
+        <div class="qr-tip">打开手机客户端扫码登录，登录成功后将自动保存凭证</div>
       </div>
-      <div v-else-if="stage === 'initializing'" class="qr-wrap">
-        <el-icon class="qr-loading" :size="32"><Loading /></el-icon>
-      </div>
-      <div class="qr-actions">
-        <el-button v-if="stage !== 'code'" type="primary"
-          :loading="busy && stage === 'initializing'" @click="$emit('refresh')">
-          {{ stage === 'qr' ? '刷新二维码' : '获取登录二维码' }}
-        </el-button>
-        <el-button v-if="stage" plain @click="$emit('cancel')">取消</el-button>
-        <span v-if="hint" class="ops-hint">{{ hint }}</span>
-      </div>
-      <span class="ops-hint ops-tip">打开手机客户端扫码登录，登录成功后将自动保存凭证</span>
     </el-form-item>
 
     <el-form-item v-if="stage === 'code'" label="短信验证码" required>
@@ -44,12 +48,20 @@ defineEmits(['refresh', 'cancel', 'submit-code'])
 </script>
 
 <style scoped>
+.qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
 .qr-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 200px;
-  height: 200px;
+  width: 180px;
+  height: 180px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -76,17 +88,18 @@ defineEmits(['refresh', 'cancel', 'submit-code'])
 .qr-actions {
   display: flex;
   align-items: center;
-  margin-top: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ops-hint {
-  margin-left: 8px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--brand);
+  font-size: 12.5px;
 }
 
-.ops-tip {
-  display: block;
-  margin: 8px 0 0;
+.qr-tip {
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.5;
 }
 </style>

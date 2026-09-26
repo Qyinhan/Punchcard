@@ -106,21 +106,23 @@
           <el-form-item v-for="f in currentPlugin.credential_fields" :key="f.key" :label="f.label"
             :required="f.required && !editingId">
             <el-input v-if="f.type === 'textarea'" v-model="form.credentials[f.key]" type="textarea" :rows="3"
-              :placeholder="editingId ? '留空则不修改' : f.placeholder" />
+              :placeholder="editingId ? '留空则不修改' : f.placeholder" style="width: 100%" />
             <el-input v-else-if="f.type === 'password'" v-model="form.credentials[f.key]" type="password" show-password
-              :placeholder="editingId ? '留空则不修改' : f.placeholder" />
+              :placeholder="editingId ? '留空则不修改' : f.placeholder" style="width: 100%" />
             <el-input v-else v-model="form.credentials[f.key]"
-              :placeholder="editingId ? '留空则不修改' : f.placeholder" />
+              :placeholder="editingId ? '留空则不修改' : f.placeholder" style="width: 100%" />
+            <div v-if="f.hint" class="field-hint">{{ f.hint }}</div>
           </el-form-item>
 
           <template v-if="currentPlugin.config_fields.length">
             <el-divider content-position="left">附加配置</el-divider>
             <el-form-item v-for="f in currentPlugin.config_fields" :key="f.key" :label="f.label">
               <el-input v-if="f.type === 'textarea'" v-model="form.extra_config[f.key]" type="textarea" :rows="2"
-                :placeholder="f.placeholder" />
+                :placeholder="f.placeholder" style="width: 100%" />
               <el-input v-else-if="f.type === 'number'" v-model="form.extra_config[f.key]" type="number"
-                :placeholder="f.placeholder" />
-              <el-input v-else v-model="form.extra_config[f.key]" :placeholder="f.placeholder" />
+                :placeholder="f.placeholder" style="width: 100%" />
+              <el-input v-else v-model="form.extra_config[f.key]" :placeholder="f.placeholder" style="width: 100%" />
+              <div v-if="f.hint" class="field-hint">{{ f.hint }}</div>
             </el-form-item>
           </template>
         </template>
@@ -472,5 +474,17 @@ onMounted(load)
   margin-top: 6px;
   font-size: 12.5px;
   color: var(--ink-3);
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 5px;
+  line-height: 1.4;
+  width: 100%;
+}
+
+:deep(.el-dialog__body .el-divider--horizontal) {
+  margin: 18px 0 16px;
 }
 </style>

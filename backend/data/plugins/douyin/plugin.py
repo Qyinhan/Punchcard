@@ -15,15 +15,15 @@ class DouyinPlugin(BasePlugin):
     description = "抖音自动续火花：扫码登录后，每日向勾选的好友发送固定消息"
     builtin = True
     credential_fields = [
-        FieldSpec(key="cookies", label="Cookie（扫码登录后自动保存）", type="textarea", required=False,
+        FieldSpec(key="cookies", label="Cookie", type="textarea", required=False,
                   placeholder="由扫码登录功能自动填写，也可直接粘贴浏览器 Cookie"),
     ]
     config_fields = [
         FieldSpec(key="targets", label="目标好友", type="textarea", required=False,
                   placeholder="好友昵称，每行一个（也可用同步好友功能勾选）"),
-        FieldSpec(key="random_offset", label="随机浮动时间（分钟）", type="number", required=False,
+        FieldSpec(key="random_offset", label="随机浮动", type="number", required=False,
                   placeholder="默认 10 分钟（设定时间 ±10 分钟内随机浮动）",
-                  hint="每天签到时间在设定时间前后随机浮动指定分钟数，防风控检测"),
+                  hint="防风控检测：每天签到时间在设定时间前后随机浮动指定分钟数"),
     ]
     login_supported = True
     login_mode = "qr"

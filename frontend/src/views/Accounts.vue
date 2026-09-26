@@ -30,7 +30,13 @@
 
         <div class="row-meta">
           <span class="lbl">每日签到时间</span>
-          <span class="val mono">{{ row.schedule_time }}</span>
+          <span class="val mono">
+            {{ row.schedule_time }}
+            <span v-if="row.extra_config?.base_schedule_time" class="jitter-tag"
+              :title="`基准时间 ${row.extra_config.base_schedule_time}，每天上下随机浮动 ${row.extra_config.random_offset || 10} 分钟`">
+              ±{{ row.extra_config.random_offset || 10 }}m
+            </span>
+          </span>
         </div>
 
         <div class="row-meta">
@@ -40,9 +46,11 @@
           </span>
         </div>
 
-        <div class="row-meta" v-if="row.credential_keys.length">
+        <div class="row-meta" v-if="row.has_credentials">
           <span class="lbl">已配置凭证</span>
-          <span class="val mono cred">{{ row.credential_keys.join('、') }}</span>
+          <span class="val mono cred">
+            {{ row.credential_keys.length ? row.credential_keys.join('、') : '已保存' }}
+          </span>
         </div>
 
         <div class="row-switch">
@@ -74,6 +82,10 @@
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="form.name" placeholder="给这个账户起个名字" />
+        </el-form-item>
+        <el-form-item label="签到时间">
+          <el-time-select v-model="form.schedule_time" start="00:00" end="23:59" step="00:01"
+            placeholder="选择每日签到时间" style="width: 100%" />
         </el-form-item>
 
         <template v-if="currentPlugin">
@@ -226,6 +238,7 @@ const submitAccount = async (closeAfter) => {
     const payload = {
       platform: form.platform,
       name: form.name,
+      schedule_time: form.schedule_time || undefined,
     }
     if (editingId.value) {
       // 编辑时：仅提交有值的字段（合并语义，避免覆盖留空的敏感字段）
@@ -305,7 +318,7 @@ const checkin = async (row) => {
 
 const remove = async (row) => {
   try {
-    await ElMessageBox.confirm(`确定删除账户「${row.name}」？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(`确定删除账户「${row.name}」？删除后该账户的凭证及配置将被彻底清除。`, '提示', { type: 'warning' })
   } catch {
     return
   }
@@ -430,6 +443,16 @@ onMounted(load)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.jitter-tag {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  margin-left: 4px;
+  vertical-align: 1px;
 }
 
 .row-ops {

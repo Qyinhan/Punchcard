@@ -4,13 +4,16 @@
 - 密码用 hashlib.scrypt（带每用户随机盐）哈希存储，绝不存明文
 - 会话令牌为 32 字节随机值，只写入浏览器 HttpOnly Cookie；数据库仅存其 SHA-256 哈希
   （即使数据库泄露，也无法反推有效 Cookie）
-- 登录接口限流：按用户名 5 次 / 10 分钟、按 IP 20 次 / 分钟，防暴力破解
+- 登录接口限流：按用户名 5 次 / 10 分钟、按 IP 20 次 / 分钟，防暴力破解；
+  仅在失败时计入（调用 record_login_failure），避免合法多次成功登录触发封锁
 - 校验用常量时间比较，避免时序侧信道
+- X-Forwarded-For 仅在 PUNCHCARD_TRUSTED_PROXY=1 时信任，防客户端伪造绕过 IP 限流
 """
 
 import hashlib
 import hmac
 import logging
+import os
 import secrets
 import threading
 import time
@@ -71,8 +74,17 @@ def hash_token(token: str) -> str:
 
 
 def create_session(db, user_id: int) -> str:
-    """为用户创建会话，返回待写入 Cookie 的原始令牌。"""
+    """为用户创建会话，返回待写入 Cookie 的原始令牌。
+
+    在新建会话前清理该用户所有已过期的旧会话，防止 sessions 表无限膨胀。
+    """
     from app.models.user import Session
+
+    # 清理该用户所有已过期会话，防止 sessions 表无限增长
+    db.query(Session).filter(
+        Session.user_id == user_id,
+        Session.expires_at < now(),
+    ).delete(synchronize_session=False)
 
     token = new_session_token()
     db.add(
@@ -143,30 +155,58 @@ def _prune(d: dict[str, list[float]], window: int, now_ts: float) -> None:
 
 
 def login_rate_allowed(username: str, ip: str) -> bool:
-    """登录限流：按用户名 + 按 IP 双维度；超限返回 False（触发 429）。"""
+    """登录限流检查：按用户名 + 按 IP 双维度；超限返回 False（触发 429）。
+
+    本函数只做只读检查，不追加记录。登录失败后需显式调用
+    :func:`record_login_failure` 计入失败次数，以确保成功登录不触发封锁。
+    """
     now_ts = time.time()
     with _attempts_lock:
         _prune(_attempts_user, _LOGIN_USER_WINDOW, now_ts)
         _prune(_attempts_ip, _LOGIN_IP_WINDOW, now_ts)
 
-        ulist = _attempts_user.setdefault(username, [])
-        ulist[:] = [t for t in ulist if now_ts - t < _LOGIN_USER_WINDOW]
+        ulist = [t for t in _attempts_user.get(username, []) if now_ts - t < _LOGIN_USER_WINDOW]
         if len(ulist) >= _LOGIN_USER_MAX:
             return False
 
-        ilist = _attempts_ip.setdefault(ip, [])
-        ilist[:] = [t for t in ilist if now_ts - t < _LOGIN_IP_WINDOW]
+        ilist = [t for t in _attempts_ip.get(ip, []) if now_ts - t < _LOGIN_IP_WINDOW]
         if len(ilist) >= _LOGIN_IP_MAX:
             return False
 
-        ulist.append(now_ts)
-        ilist.append(now_ts)
-        return True
+    return True
+
+
+def record_login_failure(username: str, ip: str) -> None:
+    """记录一次登录失败（应在密码校验失败后调用）。
+
+    将失败时间戳追加到用户名和 IP 维度的限流计数中，
+    成功登录不调用此函数，避免正常使用触发封锁。
+
+    Args:
+        username: 失败的用户名。
+        ip: 请求来源 IP。
+    """
+    now_ts = time.time()
+    with _attempts_lock:
+        _attempts_user.setdefault(username, []).append(now_ts)
+        _attempts_ip.setdefault(ip, []).append(now_ts)
 
 
 def client_ip(request: Request) -> str:
-    """尽力取客户端 IP（有反代时优先 X-Forwarded-For 首项）。"""
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
+    """取客户端真实 IP。
+
+    仅在设置了 ``PUNCHCARD_TRUSTED_PROXY=1`` 环境变量时才读取
+    ``X-Forwarded-For`` 首项，否则直接使用连接层 IP，防止客户端
+    伪造请求头绕过 IP 限流。
+
+    Args:
+        request: FastAPI 请求对象。
+
+    Returns:
+        客户端 IP 字符串；无法获取时返回 ``"unknown"``。
+    """
+    if os.getenv("PUNCHCARD_TRUSTED_PROXY") == "1":
+        fwd = request.headers.get("x-forwarded-for")
+        if fwd:
+            return fwd.split(",")[0].strip()
     return request.client.host if request.client else "unknown"

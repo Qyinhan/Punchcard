@@ -27,8 +27,20 @@ export function useLoginSession({ getAccountId, onSuccess }) {
   let loginPollTimer = null
 
   // 延迟 1.5s 后轮询一次登录会话状态（登录各阶段都是异步推进的）
+  // 最多轮询 _MAX_POLL_TIMES 次（约 3 分钟），超时自动中止，防止无限轮询
+  const _MAX_POLL_TIMES = 120
+  let _pollCount = 0
+
   const scheduleLoginPoll = () => {
     clearTimeout(loginPollTimer)
+    _pollCount++
+    if (_pollCount > _MAX_POLL_TIMES) {
+      loginBusy.value = false
+      loginStage.value = 'failed'
+      loginHint.value = '登录超时，请重新发起登录'
+      ElMessage.error('登录超时，请重新发起登录')
+      return
+    }
     loginPollTimer = setTimeout(pollLogin, 1500)
   }
 
@@ -85,20 +97,20 @@ export function useLoginSession({ getAccountId, onSuccess }) {
         loginStage.value = 'qr'
         loginBusy.value = true
         if (s.scanned) {
-          loginHint.value = s.message || '二维码已扫码，请在手机抖音 APP 中完成确认登录…'
+          loginHint.value = s.message || '二维码已扫描，请在手机客户端中完成确认登录…'
         } else {
-          loginHint.value = '请用手机 APP 扫码，扫码后确认登录'
+          loginHint.value = '请用手机客户端扫码，扫码后确认登录'
           if (s.qr_image) qrImage.value = 'data:image/png;base64,' + s.qr_image
         }
         scheduleLoginPoll()
       } else if (s.stage === 'device_confirm') {
-        // 新设备登录二次验证：需要用户在手机 APP 中确认
+        // 新设备登录二次验证：需要用户在手机客户端中确认
         codePending.value = false
         loginStage.value = 'device_confirm'
         loginBusy.value = true
         loginHint.value = s.message
-          ? `请在手机「APP」中确认登录（${s.message}）`
-          : '请在手机 APP 中确认登录，确认后会自动完成…'
+          ? `请在手机客户端中确认登录（${s.message}）`
+          : '请在手机客户端中确认登录，确认后将自动完成…'
         scheduleLoginPoll()
       } else {
         loginStage.value = 'initializing'
@@ -237,6 +249,7 @@ export function useLoginSession({ getAccountId, onSuccess }) {
   const resetLoginOps = () => {
     clearTimeout(loginPollTimer)
     loginPollTimer = null
+    _pollCount = 0
     codePending.value = false
     loginStage.value = ''
     loginBusy.value = false

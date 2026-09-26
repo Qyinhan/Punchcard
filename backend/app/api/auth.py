@@ -16,6 +16,7 @@ from app.core.auth import (
     hash_token,
     hash_password,
     login_rate_allowed,
+    record_login_failure,
     set_session_cookie,
     verify_password,
 )
@@ -85,6 +86,8 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == username).first()
     ok = bool(user) and verify_password(data.password, user.password_hash)
     if not ok:
+        # 仅在失败时追加限流计数，成功登录不计入，避免合法使用触发封锁
+        record_login_failure(username, ip)
         logger.warning("登录失败 username=%s ip=%s", username, ip)
         raise HTTPException(401, "用户名或密码错误")
     token = create_session(db, user.id)

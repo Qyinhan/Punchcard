@@ -16,14 +16,14 @@
         <el-button v-if="stage" plain @click="$emit('cancel')">取消</el-button>
         <span v-if="hint" class="ops-hint">{{ hint }}</span>
       </div>
-      <span class="ops-hint ops-tip">打开手机 App，扫一扫即可登录（免验证码，登录后自动保存 Cookie）</span>
+      <span class="ops-hint ops-tip">打开手机客户端扫码登录，登录成功后将自动保存凭证</span>
     </el-form-item>
 
     <el-form-item v-if="stage === 'code'" label="短信验证码" required>
       <el-input v-model="code" placeholder="输入手机上收到的验证码" maxlength="6" />
     </el-form-item>
     <el-form-item v-if="stage === 'code'">
-      <el-button :loading="busy" @click="$emit('submit-code')">登录</el-button>
+      <el-button type="primary" :loading="busy" @click="$emit('submit-code')">确认登录</el-button>
     </el-form-item>
   </div>
 </template>

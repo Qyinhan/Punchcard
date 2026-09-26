@@ -72,12 +72,19 @@ def list_logs(
 
 
 @router.delete("", status_code=204)
-def clear_logs(account_id: int | None = None, db: Session = Depends(get_db)) -> None:
-    """按条件清空日志（account_id 为空时清空全部）。
+def clear_logs(
+    account_id: int | None = None,
+    platform: str | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+) -> None:
+    """按条件清空日志（所有过滤条件均为空时清空全部）。
 
     Args:
-        account_id: 指定账户则只清空该账户的日志。
+        account_id: 指定账户则只清空该账户的日志（可选）。
+        platform: 按平台过滤（可选）。
+        status: 按状态过滤，如 ``success`` / ``failed``（可选）。
         db: 数据库会话（依赖注入）。
     """
-    db.execute(delete(CheckinLog).where(*_build_filters(account_id, None, None)))
+    db.execute(delete(CheckinLog).where(*_build_filters(account_id, platform, status)))
     db.commit()

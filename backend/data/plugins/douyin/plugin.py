@@ -1,5 +1,6 @@
 """抖音自动续火花插件：扫码登录后，每日向勾选的好友发送固定消息。"""
 import json
+import random
 
 from app.plugins.base import BasePlugin, CheckinResult, FieldSpec
 
@@ -20,11 +21,48 @@ class DouyinPlugin(BasePlugin):
     config_fields = [
         FieldSpec(key="targets", label="目标好友", type="textarea", required=False,
                   placeholder="好友昵称，每行一个（也可用同步好友功能勾选）"),
+        FieldSpec(key="random_offset", label="随机浮动时间（分钟）", type="number", required=False,
+                  placeholder="默认 10 分钟（设定时间 ±10 分钟内随机浮动）",
+                  hint="每天签到时间在设定时间前后随机浮动指定分钟数，防风控检测"),
     ]
     login_supported = True
     login_mode = "qr"
     friends_supported = True
     default_schedule_time = "10:00"
+
+    @staticmethod
+    def _calc_jitter_time(base_time: str, jitter: int) -> str:
+        """在 base_time (HH:MM) 基础上随机浮动 [-jitter, +jitter] 分钟。"""
+        try:
+            h, m = map(int, base_time.split(":"))
+        except Exception:
+            return base_time
+        total = h * 60 + m
+        offset = random.randint(-jitter, jitter)
+        new_total = (total + offset) % 1440
+        return f"{new_total // 60:02d}:{new_total % 60:02d}"
+
+    def on_schedule_time_set(self, schedule_time: str, extra: dict) -> tuple[str, dict]:
+        """为账户生成下一次随机浮动的签到时间（上下 10 分钟内随机）。
+
+        Args:
+            schedule_time: 用户设定或当前生效的签到时间 (HH:MM)。
+            extra: 附加配置字典。
+
+        Returns:
+            (实际下一次执行时间 HH:MM, 更新后的 extra_dict)。
+        """
+        extra = dict(extra)
+        # 基准时间优先保留已记录的值，用户主动修改时采用新值
+        base_time = schedule_time or extra.get("base_schedule_time") or self.default_schedule_time
+        extra["base_schedule_time"] = base_time
+        try:
+            jitter = int(extra.get("random_offset") or 10)
+        except (ValueError, TypeError):
+            jitter = 10
+        jitter = max(0, min(jitter, 30))  # 浮动范围限制在 0~30 分钟，默认 10
+        actual_time = self._calc_jitter_time(base_time, jitter)
+        return actual_time, extra
 
     def login(self, phone: str = "", **kwargs) -> dict:
         raise NotImplementedError("抖音登录请使用 create_login_session 会话")
@@ -105,7 +143,7 @@ class DouyinPlugin(BasePlugin):
                     return [c for c in data if isinstance(c, dict) and c.get("name")]
             except (ValueError, TypeError):
                 pass
-        # 格式 2：Cookie 头字符串
+        # 格式 2：Cookie 头字符串（如从浏览器开发者工具复制的 Cookie 行）
         out = []
         for part in raw.split(";"):
             part = part.strip()
@@ -115,7 +153,8 @@ class DouyinPlugin(BasePlugin):
             name, value = name.strip(), value.strip()
             if name:
                 out.append({"name": name, "value": value, "domain": ".douyin.com", "path": "/"})
-        return out
+        # 过滤非法 Cookie name，防止恶意构造的字符串导致 Playwright 报错
+        return browser.validate_cookie_list(out)
 
 
 plugin = DouyinPlugin()

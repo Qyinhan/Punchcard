@@ -1,6 +1,7 @@
 """账户管理 API 路由：账户的增删改查、手动签到与交互式登录会话。"""
 import json
 import logging
+import re
 import threading
 import time
 
@@ -91,13 +92,15 @@ def _to_out(acc: Account) -> AccountOut:
         可用于响应序列化的 AccountOut。
     """
     creds = _decrypt_safe(acc.credentials)
-    keys = list(creds.keys())
-    # 仅回显非敏感凭证字段（如登录手机号），Cookie 等敏感值不返回
+    # 仅回显非敏感凭证字段（如登录手机号），Cookie 等敏感值不返回；
+    # credential_keys 也只暴露非敏感字段名，避免泄露内部凭证结构
     safe = {}
+    safe_keys = []
     try:
         plugin = registry.get(acc.platform)
         non_secret = {f.key for f in plugin.credential_fields if not f.sensitive}
         safe = {k: v for k, v in creds.items() if k in non_secret}
+        safe_keys = list(safe.keys())
     except ValueError:
         pass
     return AccountOut(
@@ -107,7 +110,7 @@ def _to_out(acc: Account) -> AccountOut:
         enabled=acc.enabled,
         schedule_time=acc.schedule_time,
         has_credentials=bool(acc.credentials),
-        credential_keys=keys,
+        credential_keys=safe_keys,
         credentials=safe,
         extra_config=json.loads(acc.extra_config) if acc.extra_config else {},
         last_checkin_at=acc.last_checkin_at,
@@ -134,13 +137,20 @@ def create_account(data: AccountCreate, db: Session = Depends(get_db)) -> Accoun
         plugin.validate(data.credentials)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
+    schedule_time = data.schedule_time or plugin.default_schedule_time
+    # 统一校验最终写入的调度时间格式（插件 default_schedule_time 可能格式有误）
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", schedule_time):
+        raise HTTPException(400, f"无效的调度时间格式（需为 HH:MM）: {schedule_time!r}")
+    # 插件扩展：记录基准时间并计算实际调度时间（如随机抖动防风控）
+    extra_config = dict(data.extra_config)
+    schedule_time, extra_config = plugin.on_schedule_time_set(schedule_time, extra_config)
     acc = Account(
         platform=data.platform,
         name=data.name,
         credentials=encrypt_json(data.credentials),
-        extra_config=json.dumps(data.extra_config, ensure_ascii=False),
+        extra_config=json.dumps(extra_config, ensure_ascii=False),
         enabled=data.enabled,
-        schedule_time=data.schedule_time or plugin.default_schedule_time,
+        schedule_time=schedule_time,
     )
     db.add(acc)
     db.commit()
@@ -177,7 +187,11 @@ def update_account(
     if data.enabled is not None:
         acc.enabled = data.enabled
     if data.schedule_time is not None:
-        acc.schedule_time = data.schedule_time
+        plugin = _get_plugin(acc.platform)
+        current_extra = json.loads(acc.extra_config or "{}")
+        schedule_time, updated_extra = plugin.on_schedule_time_set(data.schedule_time, current_extra)
+        acc.schedule_time = schedule_time
+        acc.extra_config = json.dumps(updated_extra, ensure_ascii=False)
     db.commit()
     db.refresh(acc)
     return _to_out(acc)
@@ -281,7 +295,6 @@ def login_status(account_id: int) -> dict:
         # 原子标记：并发轮询下只保存一次 Cookie。
         # 先加标记再移除会话：确保两个并发请求中只有第一个进锁的执行保存，
         # 第二个看到 already_saved=True 后跳过，且 session 已被 pop 后续请求直接 404。
-        # 保存完成后 discard 重置标记，确保账户下次重新登录时仍会保存。
         with _login_sessions_lock:
             already_saved = account_id in _saved_logins
             if not already_saved:
@@ -290,8 +303,10 @@ def login_status(account_id: int) -> dict:
         if not already_saved:
             _save_login_cookies(account_id, state.get("cookies") or [])
             logger.info("账户 %s 登录成功，Cookie 已保存", account_id)
-        # 重置去重标记，使账户下次登录仍能触发保存
-        _saved_logins.discard(account_id)
+            # 重置去重标记，使账户下次登录仍能触发保存；
+            # 放在保存完成后、锁内执行，防止并发轮询提前清除标记
+            with _login_sessions_lock:
+                _saved_logins.discard(account_id)
     return {"account_id": account_id, **state}
 
 
@@ -394,6 +409,8 @@ def _save_login_cookies(account_id: int, cookies: list) -> None:
         creds = _decrypt_safe(acc.credentials)
         creds["cookies"] = json.dumps(cookies, ensure_ascii=False)
         acc.credentials = encrypt_json(creds)
+        # 显式 add 确保 SQLAlchemy 追踪到字段变更，使 commit 时正确持久化
+        db.add(acc)
     logger.info("账户 %s 的登录 Cookie 已保存（%d 个）", account_id, len(cookies))
 
 
@@ -438,4 +455,6 @@ def _run_sync_job(account_id: int) -> dict:
             extra = json.loads(acc.extra_config or "{}")
             extra["friends"] = friends
             acc.extra_config = json.dumps(extra, ensure_ascii=False)
+            # 显式 add 确保 SQLAlchemy 追踪到字段变更，使 commit 时正确持久化
+            db.add(acc)
     return {"friends": friends}

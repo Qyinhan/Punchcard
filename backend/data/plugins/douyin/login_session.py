@@ -7,10 +7,16 @@
    - 若出现「需在手机上进行确认」等文本，标记 scanned=True，通知前端提示用户手机端确认；
    - 若检测到上下文 Cookie 中出现 .douyin.com 域的 sessionid，标记 stage="success" 并返回清洗后的 Cookies；
 4. 超时（默认 180s）或用户取消时，自动销毁 Chromium 实例与后台线程。
+
+调试文件说明：
+- 截图 (login_debug_*.png)：失败时自动保存在 data/debug/ 下，最多保留 10 个，超限自动清理最旧的。
+- HTML dump (login_debug_*.html)：仅在设置 PUNCHCARD_DEBUG_LOGIN=1 时保存。
+- 截图路径只写入服务端日志，不暴露给前端（避免泄露服务器文件系统结构）。
 """
 
 import base64
 import logging
+import os
 import queue
 import threading
 import time
@@ -246,12 +252,11 @@ class LoginSession:
 
             page.wait_for_timeout(1500)
 
-        shot = self._save_debug_screenshot(page)
+        self._save_debug_screenshot(page)
         self._dump_html(page, "qr_timeout")
         scanned_any = popup_first_seen or confirm_attempts > 0
         raise RuntimeError(
             "扫码登录超时" + ("，请重试" if scanned_any else "，二维码可能已过期，请点击重新获取")
-            + (f"（截图={shot}）" if shot else "")
         )
 
     def _has_confirmation_popup(self, page) -> bool:
@@ -422,16 +427,39 @@ class LoginSession:
 
         return ""
 
-    def _save_debug_screenshot(self, page) -> str:
-        """失败时保存页面截图，便于排查（存到 data/login_debug_*.png）。"""
+    def _save_debug_screenshot(self, page) -> bool:
+        """失败时保存页面截图，便于排查（存到 data/debug/）。
+
+        自动清理超过 10 个的旧截图，避免无限堆积。
+        截图路径仅写入服务端日志，不暴露给前端。
+
+        Returns:
+            截图是否保存成功。
+        """
         try:
             from app.core.config import DATA_DIR
 
-            path = DATA_DIR / f"login_debug_{self.account_id}_{int(time.time())}.png"
+            debug_dir = DATA_DIR / "debug"
+            debug_dir.mkdir(exist_ok=True)
+
+            # 清理旧截图：保留最新 10 个（按修改时间排序）
+            existing = sorted(
+                debug_dir.glob(f"login_debug_{self.account_id}_*.png"),
+                key=lambda p: p.stat().st_mtime,
+            )
+            for old in existing[:-9]:  # 保留 9 个，加上本次共 10 个
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+
+            path = debug_dir / f"login_debug_{self.account_id}_{int(time.time())}.png"
             page.screenshot(path=str(path))
-            return str(path)
+            # 路径仅写日志，不返回给调用方拼入前端消息
+            logger.info("已保存登录调试截图: %s", path)
+            return True
         except Exception:  # noqa: BLE001
-            return ""
+            return False
 
     @staticmethod
     def _has_session_cookie(cookies: list[dict]) -> bool:
@@ -561,15 +589,11 @@ class LoginSession:
         code = str(code).strip()
         if not code:
             raise RuntimeError("请输入验证码")
-        # 第一时间切掉 device_code，让前端进入"正在验证登录…"等待状态，
-        # 避免前端轮询到旧的 code 状态而退回输入框并清空已输入的验证码
         self._set_state({"stage": "initializing", "message": "正在验证登录…"})
         el = self._find_code_input(page)
         if el is None:
-            shot = self._save_debug_screenshot(page)
-            raise RuntimeError(
-                "未找到验证码输入框" + (f"（截图={shot}）" if shot else "")
-            )
+            self._save_debug_screenshot(page)
+            raise RuntimeError("未找到验证码输入框，请重试")
 
         # 用真实键盘输入：React 受控组件只认键盘事件，程序式 fill 可能
         # 写不进组件状态，导致提交被忽略或提交后输入框被清空
@@ -587,8 +611,8 @@ class LoginSession:
             typed_len = -1
         logger.info("验证码已填入（长度 %s，账户 %s）", typed_len, self.account_id)
         if typed_len == 0:
-            shot = self._save_debug_screenshot(page)
-            raise RuntimeError(f"验证码未能填入输入框，请重试（截图={shot}）")
+            self._save_debug_screenshot(page)
+            raise RuntimeError("验证码未能填入输入框，请重试")
         if typed_len < 0:
             # input_value() 抛异常通常意味着元素已 detach（页面正在跳转），
             # 记录警告后继续尝试提交，避免因读取失败而放弃已完成的输入
@@ -613,7 +637,7 @@ class LoginSession:
         clicked = self._click_submit_button(page, anchor=fresh_el or el)
         logger.info("提交按钮点击结果=%s（账户 %s）", clicked, self.account_id)
         page.wait_for_timeout(2000)
-        self._save_debug_screenshot(page)  # 诊断：提交后的页面状态
+        self._save_debug_screenshot(page)  # 诊断：提交后的页面状态，路径写入日志
 
         deadline = time.time() + QR_WAIT_SECONDS
         while time.time() < deadline:
@@ -629,11 +653,11 @@ class LoginSession:
             # 不再干等 180s 超时
             err = self._code_error_text(page, fresh_el or el)
             if err:
-                shot = self._save_debug_screenshot(page)
-                raise RuntimeError(f"抖音提示「{err}」，请重新获取验证码再试（截图={shot}）")
+                self._save_debug_screenshot(page)
+                raise RuntimeError(f"抖音提示「{err}」，请重新获取验证码再试")
             page.wait_for_timeout(1500)
-        shot = self._save_debug_screenshot(page)
-        raise RuntimeError(f"登录超时，请检查验证码是否正确（截图={shot}）")
+        self._save_debug_screenshot(page)
+        raise RuntimeError("登录超时，请检查验证码是否正确")
 
     def _wait_session(self, page, seconds: float) -> bool:
         """在指定秒数内轮询等待 sessionid Cookie 出现。
@@ -794,23 +818,30 @@ class LoginSession:
         return option_clicked or submit_clicked
 
     def _dump_html(self, page, tag: str) -> None:
-        """把当前页面 DOM 存到 data/login_debug_*.html，便于排查弹窗结构。
+        """把当前页面 DOM 存到 data/debug/login_debug_*.html，便于排查弹窗结构。
 
         主文档与各 iframe 分开保存（MFA 弹窗可能渲染在 iframe 内，
         page.content() 只有主文档）。
+
+        仅在 ``PUNCHCARD_DEBUG_LOGIN=1`` 时执行，默认关闭，避免生产环境
+        无限累积含敏感信息的 HTML 文件。
         """
+        if os.getenv("PUNCHCARD_DEBUG_LOGIN") != "1":
+            return
         try:
             from app.core.config import DATA_DIR
 
+            debug_dir = DATA_DIR / "debug"
+            debug_dir.mkdir(exist_ok=True)
             ts = int(time.time())
-            path = DATA_DIR / f"login_debug_{self.account_id}_{tag}_{ts}.html"
+            path = debug_dir / f"login_debug_{self.account_id}_{tag}_{ts}.html"
             path.write_text(page.content(), encoding="utf-8")
             logger.info("已保存页面 HTML: %s", path)
             for idx, frame in enumerate(page.frames):
                 if frame == page.main_frame:
                     continue
                 try:
-                    fpath = DATA_DIR / f"login_debug_{self.account_id}_{tag}_frame{idx}_{ts}.html"
+                    fpath = debug_dir / f"login_debug_{self.account_id}_{tag}_frame{idx}_{ts}.html"
                     fpath.write_text(frame.content(), encoding="utf-8")
                     logger.info("已保存 iframe HTML: %s", fpath)
                 except Exception:  # noqa: BLE001

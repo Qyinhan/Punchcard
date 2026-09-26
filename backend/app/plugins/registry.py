@@ -261,6 +261,10 @@ class PluginRegistry:
 
         tmp = PLUGINS_DIR / f"__tmp_{time.time_ns()}"
         tmp.mkdir(parents=True, exist_ok=True)
+        # 解压大小限制：防止 zip-bomb（小压缩包解压成超大文件）耗尽磁盘/内存
+        _MAX_UNZIP_BYTES = 50 * 1024 * 1024   # 解压后总大小上限 50 MB
+        _MAX_FILE_BYTES = 10 * 1024 * 1024    # 单个文件大小上限 10 MB
+        total_unzipped = 0
         try:
             tmp_resolved = tmp.resolve()
             for n in entries:
@@ -270,6 +274,16 @@ class PluginRegistry:
                 if not dest.is_relative_to(tmp_resolved):
                     raise RuntimeError(f"非法的文件路径: {n}")
                 dest.parent.mkdir(parents=True, exist_ok=True)
+                info = zf.getinfo(n)
+                if info.file_size > _MAX_FILE_BYTES:
+                    raise RuntimeError(
+                        f"文件 {n} 解压后大小超过限制（最大 {_MAX_FILE_BYTES // 1024 // 1024} MB）"
+                    )
+                total_unzipped += info.file_size
+                if total_unzipped > _MAX_UNZIP_BYTES:
+                    raise RuntimeError(
+                        f"插件解压总大小超过限制（最大 {_MAX_UNZIP_BYTES // 1024 // 1024} MB）"
+                    )
                 with zf.open(n) as src, open(dest, "wb") as out:
                     out.write(src.read())
             plugin = self._load_user_dir(tmp)

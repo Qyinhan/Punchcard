@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <div class="page-title">平台插件</div>
-        <div class="page-sub">各平台签到能力以插件形式管理：安装、启用/停用、卸载（卸载前需先删除该平台账户）；「内置」仅表示随项目附带，同样可卸载</div>
+        <div class="page-sub">管理各平台的签到插件：支持安装、启停与卸载。卸载插件前请先删除关联账户</div>
       </div>
       <div class="toolbar">
         <el-button @click="reload">重新加载</el-button>
@@ -112,7 +112,7 @@ const reload = async () => {
 
 const remove = async (row) => {
   try {
-    await ElMessageBox.confirm(`确定卸载插件「${row.name}」(${row.platform})？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(`确定卸载插件「${row.name}」(${row.platform})？若有关联账户，需先将其删除。`, '提示', { type: 'warning' })
   } catch {
     return
   }

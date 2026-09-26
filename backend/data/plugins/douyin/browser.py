@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import threading
+import unicodedata
 
 from playwright.sync_api import sync_playwright
 
@@ -34,6 +35,11 @@ EDITOR = ".messageEditorinputArea[contenteditable='true']"
 EMOJI_BTN = "svg.messageMsgInputiconAction"
 EMOJI_ITEM = ".emojiEmojiItememojiItem"
 EMOJI_DESC = ".emojiEmojiItememojiItemDesc"
+
+# Cookie name 合法字符集（RFC 6265）
+_COOKIE_NAME_INVALID = re.compile(r'[\x00-\x1f\x7f\s()<>@,;:\\"\/\[\]?={}]')
+_COOKIE_MAX_NAME_LEN = 256
+_COOKIE_MAX_VALUE_LEN = 4096
 
 
 def _launch_kwargs() -> dict:
@@ -97,6 +103,34 @@ def sanitize_cookies(cookies: list[dict]) -> list[dict]:
     return out
 
 
+def validate_cookie_list(cookies: list[dict]) -> list[dict]:
+    """过滤掉 name 含非法字符或长度超限的 Cookie 条目，防止 Playwright 报错。
+
+    合法 Cookie name 应符合 RFC 6265 token 规范，不含控制字符、空白、
+    括号、分号等特殊字符，也不得过长。
+
+    Args:
+        cookies: 待校验的 Cookie 列表。
+
+    Returns:
+        通过校验的 Cookie 列表（name 非空且合法）。
+    """
+    valid = []
+    for c in cookies:
+        name = str(c.get("name", "")).strip()
+        value = str(c.get("value", ""))
+        if not name:
+            continue
+        if _COOKIE_NAME_INVALID.search(name) or len(name) > _COOKIE_MAX_NAME_LEN:
+            logger.warning("跳过非法 Cookie name: %r", name)
+            continue
+        if len(value) > _COOKIE_MAX_VALUE_LEN:
+            logger.warning("跳过超长 Cookie value（name=%r）", name)
+            continue
+        valid.append(c)
+    return valid
+
+
 def _open_chat(cookies: list[dict]):
     """打开注入 Cookie 后的抖音网页版 IM。
 
@@ -112,7 +146,7 @@ def _open_chat(cookies: list[dict]):
     context.set_default_timeout(DEFAULT_TIMEOUT_MS)
     page = context.new_page()
     page.goto(HOME_URL, wait_until="domcontentloaded")
-    context.add_cookies(sanitize_cookies(cookies))
+    context.add_cookies(sanitize_cookies(validate_cookie_list(cookies)))
     page.goto(CHAT_URL, wait_until="domcontentloaded")
     # 等待会话列表容器出现，比固定等待更可靠；超时降级到固定等待
     try:
@@ -172,16 +206,36 @@ def _scroll_and_check_stop(page, scroller) -> bool:
     return after <= before
 
 
+def _normalize_name(name: str) -> str:
+    """规范化昵称字符串，用于比较时消除不可见差异。
+
+    对昵称做 Unicode NFKC 规范化，去除首尾空白与控制字符，
+    解决 emoji 变体选择符、零宽空格、全半角差异导致的匹配失败。
+
+    Args:
+        name: 原始昵称字符串。
+
+    Returns:
+        规范化后的昵称。
+    """
+    # NFKC：兼容分解 + 规范组合，处理全角/半角、emoji 变体选择符等
+    normalized = unicodedata.normalize("NFKC", name)
+    # 去除控制字符（包括零宽空格 U+200B 等）
+    normalized = "".join(ch for ch in normalized if not unicodedata.category(ch).startswith("C"))
+    return normalized.strip()
+
+
 def _find_conversation(page, target: str) -> None:
     """按标题滚动查找目标会话并点击，到底后提前终止。
 
     Args:
         page: Playwright 页面对象。
-        target: 目标好友昵称。
+        target: 目标好友昵称（会做 Unicode NFKC 规范化后比较）。
 
     Raises:
         RuntimeError: 未在会话列表中找到目标时抛出。
     """
+    target_norm = _normalize_name(target)
     scroller = page.locator(CONV_SCROLL).first
     try:
         scroller.evaluate("(e) => e.scrollTop = 0")
@@ -192,8 +246,8 @@ def _find_conversation(page, target: str) -> None:
         items = page.locator(CONV_ITEM)
         for i in range(items.count()):
             try:
-                title = items.nth(i).locator(CONV_TITLE).inner_text(timeout=1500).strip()
-                if title == target:
+                raw = items.nth(i).locator(CONV_TITLE).inner_text(timeout=1500)
+                if _normalize_name(raw) == target_norm:
                     items.nth(i).click()
                     page.wait_for_timeout(2500)
                     return
@@ -285,6 +339,25 @@ def _send_to_one(page, target: str, segments: list[tuple[str, str]]) -> None:
             _send_emoji(page, value)
 
 
+def _close_browser(browser, playwright) -> None:
+    """安全关闭浏览器与 Playwright 实例，分别捕获异常确保双方均被清理。
+
+    Args:
+        browser: Playwright Browser 实例（可为 None）。
+        playwright: Playwright 实例（可为 None）。
+    """
+    if browser is not None:
+        try:
+            browser.close()
+        except Exception:  # noqa: BLE001
+            logger.warning("关闭浏览器时出错", exc_info=True)
+    if playwright is not None:
+        try:
+            playwright.stop()
+        except Exception:  # noqa: BLE001
+            logger.warning("停止 Playwright 时出错", exc_info=True)
+
+
 def list_friends(cookies: list[dict]) -> list[str]:
     """无头浏览器滚动会话列表，收集好友昵称。
 
@@ -317,10 +390,7 @@ def list_friends(cookies: list[dict]) -> list[str]:
             logger.info("同步好友完成，共 %d 个", len(names))
             return names
         finally:
-            if browser is not None:
-                browser.close()
-            if playwright is not None:
-                playwright.stop()
+            _close_browser(browser, playwright)
 
 
 def send_messages(cookies: list[dict], targets: list[str], message: str):
@@ -344,6 +414,7 @@ def send_messages(cookies: list[dict], targets: list[str], message: str):
     if not segments:
         return CheckinResult(success=False, message="消息内容为空")
 
+    # 非阻塞尝试获取锁：另一个任务正在使用浏览器时立即返回失败
     if not browser_guard.acquire(blocking=False):
         return CheckinResult(success=False, message="另一个浏览器任务正在执行，请稍后再试")
 
@@ -369,8 +440,6 @@ def send_messages(cookies: list[dict], targets: list[str], message: str):
         detail = "；".join(failed) if failed else "未找到任何目标好友"
         return CheckinResult(success=False, message=f"发送失败：{detail}")
     finally:
-        if browser is not None:
-            browser.close()
-        if playwright is not None:
-            playwright.stop()
+        # 分别捕获清理异常，确保 browser_guard 一定被释放（B2 修复）
+        _close_browser(browser, playwright)
         browser_guard.release()

@@ -108,6 +108,10 @@ def _acquire_db_lock(account_id: int, source: str) -> bool:
             return False
         # 自动触发：若近期已成功签到（含手动），不再重复自动执行
         if source == "auto" and acc.last_checkin_at is not None:
+            # 同一自然日已签到，跳过自动触发（彻底避免动态调整时间导致的同天重跑）
+            if acc.last_checkin_at.date() == now().date():
+                logger.info("账户 %s 今日已签到，跳过自动触发 (%s)", account_id, source)
+                return False
             delta = now() - acc.last_checkin_at
             if delta.total_seconds() < _AUTO_DEDUP_SECONDS:
                 logger.info("账户 %s 近期已签到，跳过自动触发 (%s)", account_id, source)
@@ -216,6 +220,14 @@ def _execute(account_id: int, source: str) -> CheckinLog | None:
             db.add(log)
             if result.success:
                 account.last_checkin_at = now()
+                # 签到成功后，允许插件重新规划下一次签到时间（如随机浮动防风控）
+                base_time = extra.get("base_schedule_time") or account.schedule_time
+                next_time, updated_extra = plugin.on_schedule_time_set(base_time, extra)
+                if next_time != account.schedule_time or updated_extra != extra:
+                    account.schedule_time = next_time
+                    account.extra_config = json.dumps(updated_extra, ensure_ascii=False)
+                    db.add(account)
+                    logger.info("账户 %s 下次签到时间已更新为 %s（基准 %s）", account.id, next_time, base_time)
             db.commit()
             return log
     except Exception as exc:  # noqa: BLE001  任何异常都记录为失败日志

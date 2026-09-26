@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <div class="page-title">任务设置</div>
-        <div class="page-sub">设置各账户的每日签到时间与任务对象，到点自动执行对应平台插件</div>
+        <div class="page-sub">设置各账户的每日签到时间与目标好友，定时自动执行对应平台插件</div>
       </div>
       <div class="toolbar">
         <el-button @click="load">刷新</el-button>
@@ -30,6 +30,10 @@
             <span class="lbl">每日签到时间</span>
             <el-time-select v-model="row.schedule_time" start="00:00" end="23:59" step="00:01"
               placeholder="选择时间" style="width: 140px" @change="(v) => saveTime(row, v)" />
+            <span v-if="row.extra_config?.base_schedule_time" class="jitter-hint"
+              :title="`基准时间 ${row.extra_config.base_schedule_time}，每天上下随机浮动 ${row.extra_config.random_offset || 10} 分钟`">
+              浮动 ±{{ row.extra_config.random_offset || 10 }}m
+            </span>
           </div>
 
           <div class="row-last">
@@ -48,7 +52,7 @@
         <div v-if="supportsFriends(row)" class="row-targets">
           <span class="lbl">目标好友</span>
           <el-select v-model="row._targets" multiple filterable popper-class="friend-dropdown"
-            placeholder="勾选目标好友" class="targets-select">
+            :placeholder="friendCount(row) ? '选择目标好友（支持多选）' : '请先点击右侧「同步好友列表」'" class="targets-select">
             <el-option v-for="f in (row.extra_config?.friends || [])" :key="f" :label="f" :value="f" />
           </el-select>
           <el-button size="small" plain :loading="row._syncing" @click="syncFriends(row)">
@@ -100,8 +104,11 @@ const load = async () => {
 
 const saveTime = async (row, val) => {
   try {
-    await updateAccount(row.id, { schedule_time: val })
-    ElMessage.success(`已设置「${row.name}」签到时间 ${val}`)
+    const updated = await updateAccount(row.id, { schedule_time: val })
+    row.schedule_time = updated.schedule_time
+    row.extra_config = updated.extra_config
+    const jitterText = updated.extra_config?.base_schedule_time ? '（已启用上下随机浮动）' : ''
+    ElMessage.success(`已设置「${row.name}」签到时间为 ${val}${jitterText}`)
   } catch (e) {
     ElMessage.error(e.message)
     load()
@@ -134,7 +141,7 @@ const pollJob = async (row, jobId) => {
       const friends = job.result?.friends || []
       row.extra_config = { ...(row.extra_config || {}), friends }
       row._targets = [...(row.extra_config.targets || [])]
-      row._syncHint = friends.length ? `共获取到 ${friends.length} 个好友` : '未获取到好友'
+      row._syncHint = friends.length ? `共获取到 ${friends.length} 个好友` : '未获取到好友（请确认账号是否有会话记录）'
     } else {
       row._syncHint = ''
       ElMessage.error('同步好友失败：' + (job.error || '未知错误'))
@@ -261,6 +268,16 @@ onMounted(load)
   gap: 6px;
   flex: none;
   min-width: 96px;
+}
+
+.jitter-hint {
+  font-size: 11px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
 }
 
 .row-switch {

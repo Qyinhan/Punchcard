@@ -49,7 +49,7 @@
         </div>
         <div v-else class="empty">
           <p>还没有签到记录</p>
-          <p class="empty-sub">到「账户管理」添加账户并设置签到时间后，这里会展示执行结果</p>
+          <p class="empty-sub">添加账户并执行签到（自动定时或手动触发）后，这里会展示执行记录</p>
         </div>
       </div>
 
@@ -131,10 +131,13 @@ const enabledRate = computed(() => {
   return Math.round(((stats.value.account_enabled ?? 0) / t) * 100)
 })
 
-// 「今日已全部完成」判断：有成功记录且无失败记录
-const allDone = computed(
-  () => (stats.value.today_success ?? 0) > 0 && (stats.value.today_failed ?? 0) === 0
-)
+// 「今日已全部完成」判断：有已启用账户，且今日成功数 >= 已启用账户数，且无失败记录
+const allDone = computed(() => {
+  const enabledCount = stats.value.account_enabled ?? 0
+  const successCount = stats.value.today_success ?? 0
+  const failedCount = stats.value.today_failed ?? 0
+  return enabledCount > 0 && successCount >= enabledCount && failedCount === 0
+})
 
 // 展示用的今日执行摘要文案（无账户时给引导提示）
 const todayStatsText = computed(() => {

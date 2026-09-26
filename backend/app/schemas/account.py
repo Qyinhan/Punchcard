@@ -10,7 +10,7 @@ _SCHEDULE_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
 class AccountCreate(BaseModel):
     """新建账户请求体。"""
 
-    platform: str
+    platform: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=128)
     credentials: dict
     extra_config: dict = {}
@@ -22,7 +22,7 @@ class AccountCreate(BaseModel):
 class AccountUpdate(BaseModel):
     """部分更新账户请求体（各字段均可选）。"""
 
-    name: str | None = Field(default=None, max_length=128)
+    name: str | None = Field(default=None, min_length=1, max_length=128)
     credentials: dict | None = None
     extra_config: dict | None = None
     enabled: bool | None = None

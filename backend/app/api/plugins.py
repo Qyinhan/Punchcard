@@ -36,17 +36,23 @@ def set_plugin_enabled(platform: str, payload: dict = Body(default={})) -> dict:
     return {"platform": platform, "enabled": enabled}
 
 
+_MAX_PLUGIN_ZIP_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 @router.post("/install")
 async def install_plugin(file: UploadFile = File(...)) -> dict:
     """通过上传 ZIP 安装用户插件。
 
     Args:
-        file: ZIP 压缩包文件。
+        file: ZIP 压缩包文件（最大 10 MB）。
 
     Returns:
         安装成功的插件信息 {platform, name}。
     """
-    data = await file.read()
+    # 限制读取大小，防止超大文件导致 OOM；比上限多读 1 字节用于判断是否超限
+    data = await file.read(_MAX_PLUGIN_ZIP_BYTES + 1)
+    if len(data) > _MAX_PLUGIN_ZIP_BYTES:
+        raise HTTPException(413, f"插件包超过大小限制（最大 {_MAX_PLUGIN_ZIP_BYTES // 1024 // 1024} MB）")
     try:
         info = registry.install_zip(data, file.filename or "plugin.zip")
     except RuntimeError as exc:

@@ -8,14 +8,14 @@
     </el-form-item>
 
     <el-form-item v-if="stage === 'code'" label="短信验证码" required>
-      <el-input v-model="code" placeholder="输入收到的6位短信验证码" maxlength="6" />
+      <el-input v-model="code" placeholder="输入收到的短信验证码" maxlength="6" />
     </el-form-item>
 
     <el-form-item>
       <el-button type="primary" plain
         :loading="busy && stage === 'initializing'"
         @click="$emit('send')">获取验证码</el-button>
-      <el-button v-if="stage === 'code'" :loading="busy" @click="$emit('submit-code')">登录</el-button>
+      <el-button v-if="stage === 'code'" type="primary" :loading="busy" @click="$emit('submit-code')">确认登录</el-button>
       <el-button v-if="stage" plain @click="$emit('cancel')">取消登录</el-button>
       <span v-if="hint" class="ops-hint">{{ hint }}</span>
     </el-form-item>

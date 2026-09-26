@@ -22,7 +22,17 @@ http.interceptors.response.use(
         window.location.assign('/login')
       }
     }
-    const msg = err.response?.data?.detail || err.message || '请求失败'
+    let msg = '请求失败'
+    const detail = err.response?.data?.detail
+    if (typeof detail === 'string') {
+      msg = detail
+    } else if (Array.isArray(detail) && detail.length > 0) {
+      msg = detail.map((d) => d.msg || d.message || JSON.stringify(d)).join('；')
+    } else if (detail && typeof detail === 'object') {
+      msg = detail.msg || detail.message || JSON.stringify(detail)
+    } else if (err.message) {
+      msg = err.message
+    }
     return Promise.reject(new Error(msg))
   }
 )

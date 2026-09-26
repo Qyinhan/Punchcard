@@ -166,11 +166,13 @@ export function useLoginSession({ getAccountId, onSuccess }) {
     }
   }
 
-  const doLoginCode = async (accountId) => {
+  const doLoginCode = async () => {
     if (!smsCode.value) {
       ElMessage.warning('请输入短信验证码')
       return
     }
+    const accountId = await getAccountId()
+    if (!accountId) return
     codePending.value = true
     loginBusy.value = true
     loginStage.value = 'initializing'
@@ -186,8 +188,9 @@ export function useLoginSession({ getAccountId, onSuccess }) {
     }
   }
 
-  const doLoginCancel = async (accountId) => {
+  const doLoginCancel = async (id) => {
     try {
+      const accountId = id || (await getAccountId())
       if (accountId) await loginCancel(accountId)
     } catch (e) { /* 忽略取消失败 */ }
     resetLoginOps()

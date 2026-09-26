@@ -83,10 +83,6 @@
         <el-form-item label="名称" required>
           <el-input v-model="form.name" placeholder="给这个账户起个名字" />
         </el-form-item>
-        <el-form-item label="签到时间">
-          <el-time-select v-model="form.schedule_time" start="00:00" end="23:59" step="00:01"
-            placeholder="选择每日签到时间" style="width: 100%" />
-        </el-form-item>
 
         <template v-if="currentPlugin">
           <template v-if="currentPlugin.login_mode === 'qr'">
@@ -113,18 +109,6 @@
               :placeholder="editingId ? '留空则不修改' : f.placeholder" style="width: 100%" />
             <div v-if="f.hint" class="field-hint">{{ f.hint }}</div>
           </el-form-item>
-
-          <template v-if="currentPlugin.config_fields.length">
-            <el-divider content-position="left">附加配置</el-divider>
-            <el-form-item v-for="f in currentPlugin.config_fields" :key="f.key" :label="f.label">
-              <el-input v-if="f.type === 'textarea'" v-model="form.extra_config[f.key]" type="textarea" :rows="2"
-                :placeholder="f.placeholder" style="width: 100%" />
-              <el-input v-else-if="f.type === 'number'" v-model="form.extra_config[f.key]" type="number"
-                :placeholder="f.placeholder" style="width: 100%" />
-              <el-input v-else v-model="form.extra_config[f.key]" :placeholder="f.placeholder" style="width: 100%" />
-              <div v-if="f.hint" class="field-hint">{{ f.hint }}</div>
-            </el-form-item>
-          </template>
         </template>
       </el-form>
       <template #footer>
@@ -240,19 +224,16 @@ const submitAccount = async (closeAfter) => {
     const payload = {
       platform: form.platform,
       name: form.name,
-      schedule_time: form.schedule_time || undefined,
     }
     if (editingId.value) {
-      // 编辑时：仅提交有值的字段（合并语义，避免覆盖留空的敏感字段）
+      // 编辑时：仅提交有值的凭证字段（合并语义，避免覆盖留空的敏感字段）
       const filledCreds = Object.fromEntries(
         Object.entries(form.credentials).filter(([, v]) => v !== '' && v !== null && v !== undefined)
       )
       if (Object.keys(filledCreds).length) payload.credentials = filledCreds
-      if (Object.keys(form.extra_config).length) payload.extra_config = form.extra_config
     } else {
-      // 新建时：提交全部表单字段
+      // 新建时：提交凭证字段
       payload.credentials = form.credentials
-      payload.extra_config = form.extra_config
     }
 
     let account = { id: editingId.value }

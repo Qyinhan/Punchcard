@@ -18,13 +18,7 @@ class DouyinPlugin(BasePlugin):
         FieldSpec(key="cookies", label="Cookie", type="textarea", required=False,
                   placeholder="由扫码登录功能自动填写，也可直接粘贴浏览器 Cookie"),
     ]
-    config_fields = [
-        FieldSpec(key="targets", label="目标好友", type="textarea", required=False,
-                  placeholder="好友昵称，每行一个（也可用同步好友功能勾选）"),
-        FieldSpec(key="random_offset", label="随机浮动", type="number", required=False,
-                  placeholder="默认 10 分钟（设定时间 ±10 分钟内随机浮动）",
-                  hint="防风控检测：每天签到时间在设定时间前后随机浮动指定分钟数"),
-    ]
+    config_fields = []
     login_supported = True
     login_mode = "qr"
     friends_supported = True

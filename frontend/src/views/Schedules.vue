@@ -65,7 +65,7 @@
 
       <div v-if="!loading && !accounts.length" class="empty card">
         <p>还没有账户</p>
-        <p class="empty-sub">到「账户管理」新增账户后，即可在这里设置签到时间与任务对象</p>
+        <p class="empty-sub">到「账户管理」新增账户后，即可在这里设置每日签到时间与目标好友</p>
       </div>
     </div>
   </div>

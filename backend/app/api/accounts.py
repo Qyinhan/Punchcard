@@ -95,12 +95,10 @@ def _to_out(acc: Account) -> AccountOut:
     # 仅回显非敏感凭证字段（如登录手机号），Cookie 等敏感值不返回；
     # credential_keys 也只暴露非敏感字段名，避免泄露内部凭证结构
     safe = {}
-    safe_keys = []
     try:
         plugin = registry.get(acc.platform)
         non_secret = {f.key for f in plugin.credential_fields if not f.sensitive}
         safe = {k: v for k, v in creds.items() if k in non_secret}
-        safe_keys = list(safe.keys())
     except ValueError:
         pass
     return AccountOut(
@@ -110,7 +108,7 @@ def _to_out(acc: Account) -> AccountOut:
         enabled=acc.enabled,
         schedule_time=acc.schedule_time,
         has_credentials=bool(acc.credentials),
-        credential_keys=safe_keys,
+        credential_keys=list(safe.keys()),
         credentials=safe,
         extra_config=json.loads(acc.extra_config) if acc.extra_config else {},
         last_checkin_at=acc.last_checkin_at,
@@ -221,54 +219,31 @@ def trigger_checkin(account_id: int, db: Session = Depends(get_db)) -> dict:
     return {"log_id": log.id, "status": log.status, "message": log.message}
 
 
-@router.post("/{account_id}/login")
-def start_login(
-    account_id: int,
-    payload: dict = Body(default={}),
-    db: Session = Depends(get_db),
-) -> dict:
-    """启动交互式登录会话并请求发送验证码；前端随后轮询状态。
+def _init_login_session(account_id: int, db: Session):
+    """创建并注册登录会话，处理旧会话替换与全局唯一性检查。
 
-    仅允许同时存在一个进行中的登录会话（任何账户），避免多个无头浏览器并存。
+    start_login / start_qr_login 的公共前置步骤：取插件 → 创建会话 →
+    清理超时会话 → 替换同账户旧会话 → 检查无其他进行中会话。
+
+    Args:
+        account_id: 账户 ID。
+        db: 数据库会话。
+
+    Returns:
+        创建好并已注册到 _login_sessions 的登录会话对象。
+
+    Raises:
+        HTTPException 400: 平台不支持自动登录。
+        HTTPException 409: 已有其他账户的登录会话进行中。
     """
     acc = _get_account_or_404(db, account_id)
     plugin = _get_plugin(acc.platform)
     if not plugin.login_supported:
         raise HTTPException(400, "该平台不支持自动登录")
-    phone = str((payload or {}).get("phone", "")).strip()
-    if not phone:
-        raise HTTPException(400, "请填写登录手机号")
     session = plugin.create_login_session(account_id)
     with _login_sessions_lock:
         _cleanup_stale_sessions_unsafe()
-        # 同账户残留的旧会话（如上次未取消）自动替换，避免重复触发时误报 409
-        old = _login_sessions.pop(account_id, None)
-        if old is not None:
-            try:
-                old.close()
-            except Exception:  # noqa: BLE001
-                logger.warning("关闭残留登录会话失败（账户 %s）", account_id)
-        # 原子检查：其他账户无进行中会话
-        for s in _login_sessions.values():
-            if s.status().get("stage") not in ("success", "failed"):
-                raise HTTPException(409, "已有登录会话进行中，请先完成或取消")
-        _login_sessions[account_id] = session
-    session.start()
-    session.send_code(phone)
-    return {"ok": True, "stage": "initializing"}
-
-
-@router.post("/{account_id}/login/qr")
-def start_qr_login(account_id: int, db: Session = Depends(get_db)) -> dict:
-    """启动扫码登录：无头浏览器切到二维码，前端展示二维码并轮询状态。"""
-    acc = _get_account_or_404(db, account_id)
-    plugin = _get_plugin(acc.platform)
-    if not plugin.login_supported:
-        raise HTTPException(400, "该平台不支持自动登录")
-    session = plugin.create_login_session(account_id)
-    with _login_sessions_lock:
-        _cleanup_stale_sessions_unsafe()
-        # 同账户残留的旧会话（如上次关闭页面未取消）自动替换，避免「刷新二维码」永远 409
+        # 同账户残留的旧会话自动替换，避免重复触发时误报 409
         old = _login_sessions.pop(account_id, None)
         if old is not None:
             try:
@@ -280,6 +255,32 @@ def start_qr_login(account_id: int, db: Session = Depends(get_db)) -> dict:
             if s.status().get("stage") not in ("success", "failed"):
                 raise HTTPException(409, "已有登录会话进行中，请先完成或取消")
         _login_sessions[account_id] = session
+    return session
+
+
+@router.post("/{account_id}/login")
+def start_login(
+    account_id: int,
+    payload: dict = Body(default={}),
+    db: Session = Depends(get_db),
+) -> dict:
+    """启动交互式登录会话并请求发送验证码；前端随后轮询状态。
+
+    仅允许同时存在一个进行中的登录会话（任何账户），避免多个无头浏览器并存。
+    """
+    phone = str((payload or {}).get("phone", "")).strip()
+    if not phone:
+        raise HTTPException(400, "请填写登录手机号")
+    session = _init_login_session(account_id, db)
+    session.start()
+    session.send_code(phone)
+    return {"ok": True, "stage": "initializing"}
+
+
+@router.post("/{account_id}/login/qr")
+def start_qr_login(account_id: int, db: Session = Depends(get_db)) -> dict:
+    """启动扫码登录：无头浏览器切到二维码，前端展示二维码并轮询状态。"""
+    session = _init_login_session(account_id, db)
     session.start()
     session.show_qr()
     return {"ok": True, "stage": "initializing"}
@@ -406,6 +407,7 @@ def _save_login_cookies(account_id: int, cookies: list) -> None:
     with session_scope() as db:
         acc = db.get(Account, account_id)
         if acc is None:
+            logger.warning("保存登录 Cookie 时账户不存在 account_id=%s，跳过", account_id)
             return
         creds = _decrypt_safe(acc.credentials)
         creds["cookies"] = json.dumps(cookies, ensure_ascii=False)

@@ -72,9 +72,6 @@ class BasePlugin(ABC):
             if f.required and not credentials.get(f.key):
                 raise ValueError(f"缺少必填字段: {f.label}")
 
-    def login(self, **kwargs) -> dict:
-        """[已废弃] 交互式登录改为 create_login_session() 承载。"""
-        raise NotImplementedError(f"{self.__class__.__name__} 不支持自动登录")
 
     def create_login_session(self, account_id: int):
         """创建一次交互式登录会话（如抖音验证码登录）。

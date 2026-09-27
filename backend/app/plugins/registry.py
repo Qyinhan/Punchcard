@@ -24,6 +24,9 @@ from .base import BasePlugin
 logger = logging.getLogger(__name__)
 
 _PLUGIN_ATTR = "plugin"
+# 安装 ZIP 时的解压限制（防 zip-bomb）
+_MAX_UNZIP_BYTES = 50 * 1024 * 1024   # 解压后总大小上限 50 MB
+_MAX_FILE_BYTES = 10 * 1024 * 1024    # 单个文件大小上限 10 MB
 
 
 class PluginRegistry:
@@ -176,9 +179,8 @@ class PluginRegistry:
             )
             db.add(row)
         else:
-            if enabled is None:
-                row.name = name
-            else:
+            row.name = name
+            if enabled is not None:
                 row.enabled = bool(enabled)
         return bool(row.enabled)
 
@@ -261,9 +263,6 @@ class PluginRegistry:
 
         tmp = PLUGINS_DIR / f"__tmp_{time.time_ns()}"
         tmp.mkdir(parents=True, exist_ok=True)
-        # 解压大小限制：防止 zip-bomb（小压缩包解压成超大文件）耗尽磁盘/内存
-        _MAX_UNZIP_BYTES = 50 * 1024 * 1024   # 解压后总大小上限 50 MB
-        _MAX_FILE_BYTES = 10 * 1024 * 1024    # 单个文件大小上限 10 MB
         total_unzipped = 0
         try:
             tmp_resolved = tmp.resolve()
@@ -316,12 +315,11 @@ class PluginRegistry:
             shutil.rmtree(plugin_dir, ignore_errors=True)
             self._dirs.pop(platform, None)
         # 从 sys.modules 清除该插件的模块及子模块，避免占用文件句柄
-        for name in list(sys.modules):
-            if name == self._module_names.get(platform) or (
-                self._module_names.get(platform)
-                and name.startswith(self._module_names[platform] + ".")
-            ):
-                sys.modules.pop(name, None)
+        mod = self._module_names.get(platform)
+        if mod:
+            for name in list(sys.modules):
+                if name == mod or name.startswith(mod + "."):
+                    sys.modules.pop(name, None)
         self._module_names.pop(platform, None)
         self._plugins.pop(platform, None)
         self._enabled.pop(platform, None)

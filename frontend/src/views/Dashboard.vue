@@ -299,9 +299,9 @@ onMounted(load)
 
 .tl-item {
   display: grid;
-  grid-template-columns: 44px 20px 1fr;
+  grid-template-columns: 96px 24px 1fr;
   align-items: start;
-  padding: 6px 0;
+  padding: 8px 0;
 }
 
 .tl-time {
@@ -318,7 +318,7 @@ onMounted(load)
   display: flex;
   justify-content: center;
   height: 100%;
-  padding-top: 5px;
+  padding-top: 6px;
 }
 
 .tl-dot {
@@ -348,7 +348,7 @@ onMounted(load)
 
 .tl-body {
   min-width: 0;
-  padding: 0 0 14px 2px;
+  padding: 0 0 16px 4px;
   border-bottom: 1px dashed var(--line);
 }
 
@@ -458,6 +458,16 @@ onMounted(load)
 @media (max-width: 1100px) {
   .row2 {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tl-item {
+    grid-template-columns: 80px 20px 1fr;
+  }
+
+  .tl-time {
+    font-size: 11px;
   }
 }
 </style>

@@ -23,16 +23,19 @@ export function useAuth() {
     checked.value = true
   }
 
-  const login = async (username, password) => {
-    await loginApi({ username, password })
+  const _afterAuth = async () => {
     user.value = await getMe()
     setupRequired.value = false
   }
 
+  const login = async (username, password) => {
+    await loginApi({ username, password })
+    await _afterAuth()
+  }
+
   const setup = async (username, password) => {
     await setupAuth({ username, password })
-    user.value = await getMe()
-    setupRequired.value = false
+    await _afterAuth()
   }
 
   const logout = async () => {

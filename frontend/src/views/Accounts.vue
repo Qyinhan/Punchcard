@@ -121,7 +121,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
   getPlugins, getAccounts, createAccount, updateAccount, deleteAccount, triggerCheckin,
@@ -130,6 +130,7 @@ import { useLoginSession } from '../composables/useLoginSession'
 import QrLoginPanel from '../components/login/QrLoginPanel.vue'
 import SmsLoginPanel from '../components/login/SmsLoginPanel.vue'
 import { platformName, platformShort, platformColor, fmtDateTime } from '../utils/format'
+import { confirmAction } from '../utils/confirm'
 
 const accounts = ref([])
 const plugins = ref([])
@@ -161,9 +162,9 @@ const load = async () => {
 const resetForm = (p = '') => {
   form.platform = p
   form.name = ''
-  form.credentials = {}
-  form.extra_config = {}
   form.schedule_time = '08:00'
+  // credentials 和 extra_config 由 onPlatformChange 负责清空，
+  // 避免 openCreate 中调用顺序导致双重清空
 }
 
 const onPlatformChange = () => {
@@ -175,10 +176,6 @@ const onPlatformChange = () => {
   }
 }
 
-const clearOps = () => {
-  resetLoginOps()
-}
-
 watch(dialogVisible, (v) => {
   if (!v) {
     // 关对话框时若登录还在进行，取消服务器会话，避免残留导致下次登录 409。
@@ -186,7 +183,7 @@ watch(dialogVisible, (v) => {
     if (editingId.value) {
       doLoginCancel(editingId.value)
     } else {
-      clearOps()
+      resetLoginOps()
     }
     load()
   }
@@ -194,7 +191,7 @@ watch(dialogVisible, (v) => {
 
 const openCreate = () => {
   editingId.value = null
-  clearOps()
+  resetLoginOps()
   resetForm(plugins.value[0]?.platform || '')
   onPlatformChange()
   dialogVisible.value = true
@@ -202,7 +199,7 @@ const openCreate = () => {
 
 const openEdit = (row) => {
   editingId.value = row.id
-  clearOps()
+  resetLoginOps()
   resetForm(row.platform)
   form.name = row.name
   form.schedule_time = row.schedule_time
@@ -300,18 +297,11 @@ const checkin = async (row) => {
 }
 
 const remove = async (row) => {
-  try {
-    await ElMessageBox.confirm(`确定删除账户「${row.name}」？删除后该账户的凭证及配置将被彻底清除。`, '提示', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await deleteAccount(row.id)
-    ElMessage.success('已删除')
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
+  await confirmAction(
+    `确定删除账户「${row.name}」？删除后该账户的凭证及配置将被彻底清除。`,
+    async () => { await deleteAccount(row.id); load() },
+    '已删除',
+  )
 }
 
 onMounted(load)

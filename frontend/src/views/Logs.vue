@@ -59,7 +59,7 @@
 
       <div class="pager">
         <el-pagination background layout="total, prev, pager, next" :total="total"
-          :page-size="pageSize" v-model:current-page="page" @current-change="(p) => load(p)" />
+          :page-size="pageSize" v-model:current-page="page" @current-change="load" />
       </div>
     </div>
   </div>
@@ -67,9 +67,10 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getLogs, getPlugins, clearLogs } from '../api'
 import { platformName, fmtDateTime } from '../utils/format'
+import { confirmAction } from '../utils/confirm'
 
 const logs = ref([])
 const plugins = ref([])
@@ -103,27 +104,16 @@ const resetFilters = () => {
 }
 
 const clearAll = async () => {
-  try {
-    await ElMessageBox.confirm('确定清空所有签到日志？此操作不可恢复。', '提示', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await clearLogs()
-    ElMessage.success('已清空')
-    load(1)
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
+  await confirmAction(
+    '确定清空所有签到日志？此操作不可恢复。',
+    async () => { await clearLogs(); load(1) },
+    '已清空',
+  )
 }
 
 onMounted(async () => {
-  try {
-    plugins.value = await getPlugins()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-  load(1)
+  const [pls] = await Promise.all([getPlugins().catch((e) => { ElMessage.error(e.message); return [] }), load(1)])
+  plugins.value = pls
 })
 </script>
 

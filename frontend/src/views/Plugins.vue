@@ -20,7 +20,7 @@
       <div v-for="row in plugins" :key="row.platform" class="plug card" :class="{ off: row.enabled === false }">
         <div class="plug-top">
           <div class="plug-avatar" :class="{ on: row.enabled !== false }">
-            {{ (row.name || row.platform).slice(0, 1).toUpperCase() }}
+            {{ platformShort(plugins, row.platform) }}
           </div>
           <div class="plug-title">
             <div class="plug-name">
@@ -53,9 +53,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 import { getPlugins, updatePlugin, installPlugin, reloadPlugins, uninstallPlugin } from '../api'
+import { platformShort } from '../utils/format'
+import { confirmAction } from '../utils/confirm'
 
 const plugins = ref([])
 const loading = ref(false)
@@ -111,18 +113,11 @@ const reload = async () => {
 }
 
 const remove = async (row) => {
-  try {
-    await ElMessageBox.confirm(`确定卸载插件「${row.name}」(${row.platform})？若有关联账户，需先将其删除。`, '提示', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await uninstallPlugin(row.platform)
-    ElMessage.success('已卸载')
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
+  await confirmAction(
+    `确定卸载插件「${row.name}」(${row.platform})？若有关联账户，需先将其删除。`,
+    async () => { await uninstallPlugin(row.platform); load() },
+    '已卸载',
+  )
 }
 
 onMounted(load)

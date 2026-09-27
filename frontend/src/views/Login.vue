@@ -44,7 +44,7 @@ import { Stamp } from '@element-plus/icons-vue'
 import { useAuth } from '../store/auth'
 
 const router = useRouter()
-const { setupRequired, init, login, setup } = useAuth()
+const { setupRequired, checked, init, login, setup } = useAuth()
 
 const form = ref({ username: '', password: '', confirm: '' })
 const loading = ref(false)
@@ -75,7 +75,7 @@ const submit = async () => {
 }
 
 onMounted(async () => {
-  if (!useAuth().checked.value) await init()
+  if (!checked.value) await init()
 })
 </script>
 

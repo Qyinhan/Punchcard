@@ -172,9 +172,10 @@ const syncFriends = async (row) => {
 
 const saveTargets = async (row) => {
   const targets = Array.isArray(row._targets) ? [...row._targets] : []
+  const newConfig = { ...(row.extra_config || {}), targets }
   try {
-    await updateAccount(row.id, { extra_config: { ...(row.extra_config || {}), targets } })
-    row.extra_config = { ...(row.extra_config || {}), targets }
+    await updateAccount(row.id, { extra_config: newConfig })
+    row.extra_config = newConfig
     ElMessage.success(`已保存「${row.name}」的目标好友（${targets.length} 个）`)
   } catch (e) {
     ElMessage.error(e.message)

@@ -11,7 +11,6 @@ import time
 from datetime import timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from cryptography.fernet import InvalidToken
 from sqlalchemy import or_, select, update
 
 from app.core.config import TIMEZONE, now
@@ -128,7 +127,6 @@ def _acquire_db_lock(account_id: int, source: str) -> bool:
             )
             .values(running=True, running_since=now())
         )
-        db.commit()
         if res.rowcount != 1:
             logger.info("账户 %s 的签到锁被其它进程占用，跳过 (%s)", account_id, source)
             return False
@@ -147,7 +145,6 @@ def _release_db_lock(account_id: int) -> None:
             if acc is not None:
                 acc.running = False
                 acc.running_since = None
-                db.commit()
     except Exception:  # noqa: BLE001
         logger.exception("释放账户签到锁失败 account_id=%s", account_id)
 
@@ -187,11 +184,10 @@ def _execute(account_id: int, source: str) -> CheckinLog | None:
                     duration_ms=0,
                 )
                 db.add(log)
-                db.commit()
                 return log
             try:
                 credentials = decrypt_json(account.credentials)
-            except (InvalidToken, Exception):  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 # 凭证解密失败（密钥变更或数据损坏）：记录失败日志，不崩溃调度器
                 log = CheckinLog(
                     account_id=account.id,
@@ -203,7 +199,6 @@ def _execute(account_id: int, source: str) -> CheckinLog | None:
                     duration_ms=0,
                 )
                 db.add(log)
-                db.commit()
                 return log
             extra = json.loads(account.extra_config or "{}")
             result: CheckinResult = plugin.checkin(credentials, extra)
@@ -226,7 +221,6 @@ def _execute(account_id: int, source: str) -> CheckinLog | None:
                 db.add(account)
                 next_time = updated_extra.get("next_schedule_time", account.schedule_time)
                 logger.info("账户 %s 下次签到时间已规划为 %s（基准 %s）", account.id, next_time, account.schedule_time)
-            db.commit()
             return log
     except Exception as exc:  # noqa: BLE001  任何异常都记录为失败日志
         logger.exception("签到异常 account_id=%s", account_id)
@@ -277,8 +271,9 @@ class SchedulerService:
 
     def _tick(self) -> None:
         """每分钟扫描一次，找到到点的账户并触发签到。"""
-        hhmm = now().strftime("%H:%M")
-        today = now().date()
+        _now = now()
+        hhmm = _now.strftime("%H:%M")
+        today = _now.date()
         logger.debug("调度扫描 %s", hhmm)
         matched_ids: list[int] = []
         with session_scope() as db:

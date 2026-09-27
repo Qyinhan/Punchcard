@@ -33,7 +33,8 @@ class DouyinPlugin(BasePlugin):
             return base_time
         total = h * 60 + m
         offset = random.randint(-jitter, jitter)
-        new_total = (total + offset) % 1440
+        # 限制在当天自然日内 (00:00 ~ 23:59)，避免因模运算跨天导致日期错位
+        new_total = max(0, min(1439, total + offset))
         return f"{new_total // 60:02d}:{new_total % 60:02d}"
 
     def on_schedule_time_set(self, schedule_time: str, extra: dict) -> dict:

@@ -222,11 +222,10 @@ def _execute(account_id: int, source: str) -> CheckinLog | None:
                 account.last_checkin_at = now()
                 # 签到成功后，允许插件重新规划下一次执行时间（如在 extra 中记录 next_schedule_time 防风控）
                 updated_extra = plugin.on_schedule_time_set(account.schedule_time, extra)
-                if updated_extra != extra:
-                    account.extra_config = json.dumps(updated_extra, ensure_ascii=False)
-                    db.add(account)
-                    next_time = updated_extra.get("next_schedule_time", account.schedule_time)
-                    logger.info("账户 %s 下次签到时间已更新为 %s（基准 %s）", account.id, next_time, account.schedule_time)
+                account.extra_config = json.dumps(updated_extra, ensure_ascii=False)
+                db.add(account)
+                next_time = updated_extra.get("next_schedule_time", account.schedule_time)
+                logger.info("账户 %s 下次签到时间已规划为 %s（基准 %s）", account.id, next_time, account.schedule_time)
             db.commit()
             return log
     except Exception as exc:  # noqa: BLE001  任何异常都记录为失败日志
@@ -279,6 +278,7 @@ class SchedulerService:
     def _tick(self) -> None:
         """每分钟扫描一次，找到到点的账户并触发签到。"""
         hhmm = now().strftime("%H:%M")
+        today = now().date()
         logger.debug("调度扫描 %s", hhmm)
         matched_ids: list[int] = []
         with session_scope() as db:
@@ -288,6 +288,10 @@ class SchedulerService:
             for acc in accounts:
                 if not registry.is_enabled(acc.platform):
                     continue  # 平台插件已停用，跳过
+                if acc.running:
+                    continue  # 正在执行签到中，跳过
+                if acc.last_checkin_at is not None and acc.last_checkin_at.date() == today:
+                    continue  # 今日已完成签到，跳过
                 extra = json.loads(acc.extra_config or "{}")
                 effective_time = extra.get("next_schedule_time") or acc.schedule_time
                 if effective_time == hhmm:

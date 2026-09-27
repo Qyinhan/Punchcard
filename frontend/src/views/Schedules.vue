@@ -28,7 +28,7 @@
 
           <div class="row-time">
             <span class="lbl">每日签到时间</span>
-            <el-time-select v-model="row.schedule_time" start="00:00" end="23:59" step="00:01"
+            <el-time-select v-model="row.schedule_time" :clearable="false" start="00:00" end="23:59" step="00:01"
               placeholder="选择时间" style="width: 140px" @change="(v) => saveTime(row, v)" />
             <span v-if="row.extra_config?.next_schedule_time || row.extra_config?.random_offset !== undefined" class="jitter-hint"
               :title="`基准时间 ${row.schedule_time}，每天上下随机浮动 ${row.extra_config?.random_offset ?? 10} 分钟`">
@@ -103,6 +103,7 @@ const load = async () => {
 }
 
 const saveTime = async (row, val) => {
+  if (!val) return
   try {
     const updated = await updateAccount(row.id, { schedule_time: val })
     row.schedule_time = updated.schedule_time

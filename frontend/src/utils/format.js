@@ -1,7 +1,10 @@
 // 通用格式化工具：平台展示名/缩写/配色、日期时间格式化。
 // 在多个视图（概览/账户/任务设置/日志）中复用，避免各页面重复实现。
 
-const pad2 = (n) => String(n).padStart(2, '0')
+export const pad2 = (n) => String(n).padStart(2, '0')
+
+// 中文星期缩写数组；下标对应 Date.getDay() 返回值（0=日，6=六）
+export const WEEK_NAMES = ['日', '一', '二', '三', '四', '五', '六']
 
 // 平台 key -> 插件展示名；未知平台回退显示 key 本身
 export const platformName = (plugins, key) =>

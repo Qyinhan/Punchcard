@@ -62,6 +62,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { Stamp, DataAnalysis, User, Clock, Grid, Document } from '@element-plus/icons-vue'
 import { useAuth } from '../store/auth'
+import { pad2, WEEK_NAMES } from '../utils/format'
 
 const auth = useAuth()
 const router = useRouter()
@@ -83,14 +84,12 @@ const now = ref('')
 const dateStr = ref('')
 let timer = null
 
-// 补零工具：把数字补成两位，用于时间/日期格式化
-const pad = (n) => String(n).padStart(2, '0')
 // 每秒刷新侧栏时钟（时间 + 中文日期）
 const tick = () => {
   const d = new Date()
-  now.value = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  dateStr.value = `${d.getFullYear()} / ${pad(d.getMonth() + 1)} / ${pad(d.getDate())} 周${week}`
+  now.value = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+  const week = WEEK_NAMES[d.getDay()]
+  dateStr.value = `${d.getFullYear()} / ${pad2(d.getMonth() + 1)} / ${pad2(d.getDate())} 周${week}`
 }
 
 onMounted(() => {

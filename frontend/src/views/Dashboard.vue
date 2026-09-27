@@ -91,7 +91,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Aim } from '@element-plus/icons-vue'
 import { getStats, getLogs, getPlugins, getAccounts } from '../api'
-import { platformName, fmtDateTime } from '../utils/format'
+import { platformName, fmtDateTime, WEEK_NAMES } from '../utils/format'
 
 const router = useRouter()
 
@@ -112,7 +112,7 @@ const greeting = computed(() => {
 // 生成「XXXX 年 X 月 X 日 · 周X」格式的今天日期
 const today = computed(() => {
   const d = new Date()
-  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
+  const week = WEEK_NAMES[d.getDay()]
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`
 })
 

@@ -36,27 +36,29 @@ class DouyinPlugin(BasePlugin):
         new_total = (total + offset) % 1440
         return f"{new_total // 60:02d}:{new_total % 60:02d}"
 
-    def on_schedule_time_set(self, schedule_time: str, extra: dict) -> tuple[str, dict]:
-        """为账户生成下一次随机浮动的签到时间（上下 10 分钟内随机）。
+    def on_schedule_time_set(self, schedule_time: str, extra: dict) -> dict:
+        """为账户规划实际执行时间（在用户设定的 schedule_time 上下 10 分钟内随机）。
+
+        用户的 schedule_time 保持原样不变，实际执行时间记录在 extra['next_schedule_time'] 中。
 
         Args:
-            schedule_time: 用户设定或当前生效的签到时间 (HH:MM)。
+            schedule_time: 用户设定的基准每日签到时间 (HH:MM)。
             extra: 附加配置字典。
 
         Returns:
-            (实际下一次执行时间 HH:MM, 更新后的 extra_dict)。
+            更新后的 extra 字典。
         """
         extra = dict(extra)
-        # 基准时间优先保留已记录的值，用户主动修改时采用新值
-        base_time = schedule_time or extra.get("base_schedule_time") or self.default_schedule_time
-        extra["base_schedule_time"] = base_time
+        base_time = schedule_time or self.default_schedule_time
         try:
             jitter = int(extra.get("random_offset") or 10)
         except (ValueError, TypeError):
             jitter = 10
         jitter = max(0, min(jitter, 30))  # 浮动范围限制在 0~30 分钟，默认 10
-        actual_time = self._calc_jitter_time(base_time, jitter)
-        return actual_time, extra
+        extra["random_offset"] = jitter
+        extra["next_schedule_time"] = self._calc_jitter_time(base_time, jitter)
+        extra.pop("base_schedule_time", None)
+        return extra
 
     def login(self, phone: str = "", **kwargs) -> dict:
         raise NotImplementedError("抖音登录请使用 create_login_session 会话")

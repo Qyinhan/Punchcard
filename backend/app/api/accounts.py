@@ -141,9 +141,8 @@ def create_account(data: AccountCreate, db: Session = Depends(get_db)) -> Accoun
     # 统一校验最终写入的调度时间格式（插件 default_schedule_time 可能格式有误）
     if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", schedule_time):
         raise HTTPException(400, f"无效的调度时间格式（需为 HH:MM）: {schedule_time!r}")
-    # 插件扩展：记录基准时间并计算实际调度时间（如随机抖动防风控）
-    extra_config = dict(data.extra_config)
-    schedule_time, extra_config = plugin.on_schedule_time_set(schedule_time, extra_config)
+    # 插件扩展：规划实际执行时间（如在 extra 中记录 next_schedule_time 防风控）
+    extra_config = plugin.on_schedule_time_set(schedule_time, dict(data.extra_config))
     acc = Account(
         platform=data.platform,
         name=data.name,
@@ -183,14 +182,16 @@ def update_account(
             raise HTTPException(422, str(exc))
         acc.credentials = encrypt_json(merged)
     if data.extra_config is not None:
-        acc.extra_config = json.dumps(data.extra_config, ensure_ascii=False)
+        current_extra = json.loads(acc.extra_config or "{}")
+        current_extra.update(data.extra_config)
+        acc.extra_config = json.dumps(current_extra, ensure_ascii=False)
     if data.enabled is not None:
         acc.enabled = data.enabled
     if data.schedule_time is not None:
         plugin = _get_plugin(acc.platform)
+        acc.schedule_time = data.schedule_time
         current_extra = json.loads(acc.extra_config or "{}")
-        schedule_time, updated_extra = plugin.on_schedule_time_set(data.schedule_time, current_extra)
-        acc.schedule_time = schedule_time
+        updated_extra = plugin.on_schedule_time_set(data.schedule_time, current_extra)
         acc.extra_config = json.dumps(updated_extra, ensure_ascii=False)
     db.commit()
     db.refresh(acc)

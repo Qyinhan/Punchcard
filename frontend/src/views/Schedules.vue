@@ -30,9 +30,9 @@
             <span class="lbl">每日签到时间</span>
             <el-time-select v-model="row.schedule_time" start="00:00" end="23:59" step="00:01"
               placeholder="选择时间" style="width: 140px" @change="(v) => saveTime(row, v)" />
-            <span v-if="row.extra_config?.base_schedule_time" class="jitter-hint"
-              :title="`基准时间 ${row.extra_config.base_schedule_time}，每天上下随机浮动 ${row.extra_config.random_offset || 10} 分钟`">
-              浮动 ±{{ row.extra_config.random_offset || 10 }}m
+            <span v-if="row.extra_config?.next_schedule_time || row.extra_config?.random_offset !== undefined" class="jitter-hint"
+              :title="`基准时间 ${row.schedule_time}，每天上下随机浮动 ${row.extra_config?.random_offset ?? 10} 分钟`">
+              下次预计 {{ row.extra_config?.next_schedule_time || row.schedule_time }} (±{{ row.extra_config?.random_offset ?? 10 }}m)
             </span>
           </div>
 
@@ -107,8 +107,10 @@ const saveTime = async (row, val) => {
     const updated = await updateAccount(row.id, { schedule_time: val })
     row.schedule_time = updated.schedule_time
     row.extra_config = updated.extra_config
-    const jitterText = updated.extra_config?.base_schedule_time ? '（已启用上下随机浮动）' : ''
-    ElMessage.success(`已设置「${row.name}」签到时间为 ${val}${jitterText}`)
+    const nextText = updated.extra_config?.next_schedule_time
+      ? `（下次预计 ${updated.extra_config.next_schedule_time}）`
+      : ''
+    ElMessage.success(`已设置「${row.name}」签到时间为 ${val}${nextText}`)
   } catch (e) {
     ElMessage.error(e.message)
     load()

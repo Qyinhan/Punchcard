@@ -102,20 +102,20 @@ class BasePlugin(ABC):
         """
         raise NotImplementedError(f"{self.__class__.__name__} 不支持好友列表同步")
 
-    def on_schedule_time_set(self, schedule_time: str, extra: dict) -> tuple[str, dict]:
+    def on_schedule_time_set(self, schedule_time: str, extra: dict) -> dict:
         """设置账户签到时间时的回调钩子（创建/更新/自动签到完成后调用）。
 
-        子类可覆写此方法以实现随机浮动时间（防风控）等策略。
-        默认原样返回传入的 schedule_time 与 extra。
+        子类可覆写此方法以在 extra 中规划实际执行时间（如 extra['next_schedule_time']），
+        从而实现防风控随机浮动而不修改用户设定的 schedule_time 基准时间。
 
         Args:
-            schedule_time: 用户设定或当前生效的签到时间 (HH:MM)。
+            schedule_time: 用户设定的基准每日签到时间 (HH:MM)。
             extra: 账户当前的 extra_config 字典。
 
         Returns:
-            (实际写入数据库的 schedule_time, 更新后的 extra_dict)。
+            更新后的 extra 字典。
         """
-        return schedule_time, extra
+        return extra
 
     @abstractmethod
     def checkin(self, credentials: dict, extra: dict) -> CheckinResult:

@@ -32,9 +32,9 @@
           <span class="lbl">每日签到时间</span>
           <span class="val mono">
             {{ row.schedule_time }}
-            <span v-if="row.extra_config?.base_schedule_time" class="jitter-tag"
-              :title="`基准时间 ${row.extra_config.base_schedule_time}，每天上下随机浮动 ${row.extra_config.random_offset || 10} 分钟`">
-              ±{{ row.extra_config.random_offset || 10 }}m
+            <span v-if="row.extra_config?.next_schedule_time || row.extra_config?.random_offset !== undefined" class="jitter-tag"
+              :title="`基准时间 ${row.schedule_time}，每天上下随机浮动 ${row.extra_config?.random_offset ?? 10} 分钟（下次预计 ${row.extra_config?.next_schedule_time || row.schedule_time}）`">
+              ±{{ row.extra_config?.random_offset ?? 10 }}m
             </span>
           </span>
         </div>

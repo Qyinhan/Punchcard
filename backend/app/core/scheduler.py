@@ -220,14 +220,13 @@ def _execute(account_id: int, source: str) -> CheckinLog | None:
             db.add(log)
             if result.success:
                 account.last_checkin_at = now()
-                # 签到成功后，允许插件重新规划下一次签到时间（如随机浮动防风控）
-                base_time = extra.get("base_schedule_time") or account.schedule_time
-                next_time, updated_extra = plugin.on_schedule_time_set(base_time, extra)
-                if next_time != account.schedule_time or updated_extra != extra:
-                    account.schedule_time = next_time
+                # 签到成功后，允许插件重新规划下一次执行时间（如在 extra 中记录 next_schedule_time 防风控）
+                updated_extra = plugin.on_schedule_time_set(account.schedule_time, extra)
+                if updated_extra != extra:
                     account.extra_config = json.dumps(updated_extra, ensure_ascii=False)
                     db.add(account)
-                    logger.info("账户 %s 下次签到时间已更新为 %s（基准 %s）", account.id, next_time, base_time)
+                    next_time = updated_extra.get("next_schedule_time", account.schedule_time)
+                    logger.info("账户 %s 下次签到时间已更新为 %s（基准 %s）", account.id, next_time, account.schedule_time)
             db.commit()
             return log
     except Exception as exc:  # noqa: BLE001  任何异常都记录为失败日志
@@ -281,18 +280,24 @@ class SchedulerService:
         """每分钟扫描一次，找到到点的账户并触发签到。"""
         hhmm = now().strftime("%H:%M")
         logger.debug("调度扫描 %s", hhmm)
+        matched_ids: list[int] = []
         with session_scope() as db:
             accounts = db.execute(
-                select(Account).where(Account.enabled.is_(True), Account.schedule_time == hhmm)
+                select(Account).where(Account.enabled.is_(True))
             ).scalars().all()
-        for acc in accounts:
-            if not registry.is_enabled(acc.platform):
-                continue  # 平台插件已停用，跳过
+            for acc in accounts:
+                if not registry.is_enabled(acc.platform):
+                    continue  # 平台插件已停用，跳过
+                extra = json.loads(acc.extra_config or "{}")
+                effective_time = extra.get("next_schedule_time") or acc.schedule_time
+                if effective_time == hhmm:
+                    matched_ids.append(acc.id)
+        for account_id in matched_ids:
             # 已捕获异常，无需等待结果
             self._scheduler.add_job(
                 run_checkin,
-                args=[acc.id, "auto"],
-                id=f"auto_{acc.id}_{int(time.time())}",
+                args=[account_id, "auto"],
+                id=f"auto_{account_id}_{int(time.time())}",
                 coalesce=True,
                 max_instances=1,
             )

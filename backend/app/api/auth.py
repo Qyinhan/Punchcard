@@ -4,7 +4,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.auth import (
@@ -64,7 +64,7 @@ def setup(data: SetupIn, request: Request, db: Session = Depends(get_db)):
     username = data.username.strip()
     if not username:
         raise HTTPException(400, "用户名不能为空")
-    if db.query(User).filter(User.username == username).first():
+    if db.execute(select(User).where(User.username == username)).scalar_one_or_none():
         raise HTTPException(400, "用户名已存在")
     user = User(username=username, password_hash=hash_password(data.password))
     db.add(user)
@@ -83,7 +83,7 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     ip = client_ip(request)
     if not login_rate_allowed(username, ip):
         raise HTTPException(429, "尝试次数过多，请稍后再试")
-    user = db.query(User).filter(User.username == username).first()
+    user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
     ok = bool(user) and verify_password(data.password, user.password_hash)
     if not ok:
         # 仅在失败时追加限流计数，成功登录不计入，避免合法使用触发封锁
@@ -102,7 +102,7 @@ def logout(request: Request, db: Session = Depends(get_db)):
     """注销当前会话（服务端删除令牌记录并清 Cookie）。"""
     token = request.cookies.get(SESSION_COOKIE)
     if token:
-        db.query(SessionModel).filter(SessionModel.token_hash == hash_token(token)).delete()
+        db.execute(delete(SessionModel).where(SessionModel.token_hash == hash_token(token)))
         db.commit()
     response = Response()
     clear_session_cookie(response)
@@ -110,7 +110,7 @@ def logout(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/me")
-def me(request: Request, db: Session = Depends(get_db)):
+def me(request: Request):
     """返回当前登录用户。"""
     user = get_user_from_token(request.cookies.get(SESSION_COOKIE))
     if user is None:

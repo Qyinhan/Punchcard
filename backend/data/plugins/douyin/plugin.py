@@ -13,7 +13,6 @@ class DouyinPlugin(BasePlugin):
     platform = "douyin"
     name = "抖音"
     description = "抖音自动续火花：扫码登录后，每日向勾选的好友发送固定消息"
-    builtin = True
     credential_fields = [
         FieldSpec(key="cookies", label="Cookie", type="textarea", required=False,
                   placeholder="由扫码登录功能自动填写，也可直接粘贴浏览器 Cookie"),

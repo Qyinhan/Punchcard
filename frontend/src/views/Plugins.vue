@@ -23,10 +23,7 @@
             {{ platformShort(plugins, row.platform) }}
           </div>
           <div class="plug-title">
-            <div class="plug-name">
-              {{ row.name }}
-              <el-tag v-if="row.builtin" size="small" type="info" effect="plain">内置</el-tag>
-            </div>
+            <div class="plug-name">{{ row.name }}</div>
             <div class="plug-key mono">{{ row.platform }}</div>
           </div>
           <el-switch v-model="row.enabled" @change="(v) => toggle(row, v)" />

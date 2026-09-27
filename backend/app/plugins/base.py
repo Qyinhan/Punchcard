@@ -56,8 +56,6 @@ class BasePlugin(ABC):
     login_mode: str = ""
     #: 是否支持同步好友列表（供前端勾选目标）
     friends_supported: bool = False
-    #: 是否随项目内置（随附插件）；内置只是标签，同样可卸载
-    builtin: bool = False
 
     def validate(self, credentials: dict) -> None:
         """校验凭证完整性；不通过时抛 ValueError。
@@ -143,5 +141,4 @@ class BasePlugin(ABC):
             "login_supported": self.login_supported,
             "login_mode": self.login_mode,
             "friends_supported": self.friends_supported,
-            "builtin": self.builtin,
         }

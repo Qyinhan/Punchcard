@@ -36,7 +36,6 @@ class BilibiliPlugin(BasePlugin):
     platform = "bilibili"
     name = "哔哩哔哩"
     description = "每日访问 B 站导航接口，触发登录记录，完成「每日登录」任务（+5 经验）"
-    builtin = True
     credential_fields = [
         FieldSpec(
             key="phone",

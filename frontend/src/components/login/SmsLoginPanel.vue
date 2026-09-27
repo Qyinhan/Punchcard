@@ -59,7 +59,7 @@ const setContainerRef = (el) => {
 
 .ops-hint {
   margin-left: 8px;
-  color: var(--ink-3);
+  color: var(--brand);
   font-size: 12px;
 }
 </style>
